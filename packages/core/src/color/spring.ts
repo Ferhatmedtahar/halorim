@@ -87,10 +87,7 @@ export function setSpringTargetsImmediate(
 /**
  * Updates targets while preserving current velocities (blends seamlessly on rapid clicks).
  */
-export function setSpringTargets(
-  springs: ColorStopSpring[],
-  targets: readonly ColorOKLab[],
-): void {
+export function setSpringTargets(springs: ColorStopSpring[], targets: readonly ColorOKLab[]): void {
   for (let i = 0; i < springs.length; i++) {
     const s = springs[i]!;
     const t = targets[i % targets.length]!;
@@ -177,7 +174,7 @@ function stepComponent(
  * Uses a pseudo-random seed to guarantee determinism if seed is given.
  */
 export function generateRandomPalette(seed?: number): ColorOKLab[] {
-  let rng = seed !== undefined ? pseudoRandom(seed) : Math.random;
+  const rng = seed !== undefined ? pseudoRandom(seed) : Math.random;
 
   const baseHue = rng() * 360;
   // Distinct harmonious scheme: analogous or triadic

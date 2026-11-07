@@ -19,3 +19,12 @@ export {
   linearSrgbToOklab,
   oklchToOklab,
 } from './color/oklch.js';
+export {
+  createPaletteSprings,
+  setSpringTargets,
+  setSpringTargetsImmediate,
+  stepPaletteSprings,
+  generateRandomPalette,
+  type ColorStopSpring,
+  type SpringConfig,
+} from './color/spring.js';

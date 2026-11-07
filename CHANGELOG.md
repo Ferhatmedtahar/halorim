@@ -2,6 +2,24 @@
 
 All notable changes to the Glowframe monorepo are documented in this file.
 
+## [v0.4.0] - M4: Click Hit-Testing and Spring-Animated OKLab Palettes
+
+### Added
+
+- **M4: Click Hit-Testing & Palette Physics**:
+  - Implemented CPU distance field hit-testing: evaluates coordinate in shape UV space against the exact Euclidean distance array. Dispatches `objectClick` when $d < 0$ and `backgroundClick` when $d \ge 0$.
+  - Implemented critically damped spring animation ($\zeta = 1.0$) in **OKLab** color space for all color stop transitions, avoiding muddy intermediate colors and eliminating overshoot.
+  - Implemented `next-palette` (cycles through scene palettes) and `random-palette` (generates harmonious OKLCH palettes with consistent brightness and rich chroma).
+  - Rapid click momentum blending: new targets are set without restarting or queuing unbounded work, maintaining smooth continuous motion.
+  - Zero per-frame allocations in render loop during spring transitions.
+  - Added unit test suites covering:
+    - OKLab spring convergence, critically damped behavior, and velocity preservation (`spring.test.ts`).
+    - CPU distance hit-testing inside, outside, and at the shape boundary $d=0$ (`hit-test.test.ts`).
+  - Added Playwright e2e tests (`click.e2e.test.ts`) verifying:
+    - Accurate differentiation between object and background clicks.
+    - Advancing palettes on shape clicks and ignoring background clicks.
+    - Rapid 10-click stress test without glitching or frame drops.
+
 ## [v0.3.0] - M3: Cursor Light, Smoothing, and Idle Orbit
 
 ### Added

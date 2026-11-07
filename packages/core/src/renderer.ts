@@ -113,7 +113,8 @@ export function createRenderer(options: RendererOptions): Renderer {
     bgColorBuffer[1] = rawBg[1];
     bgColorBuffer[2] = rawBg[2];
 
-    const currentPalette = scene.palettes[currentPaletteIndex] ?? scene.palettes[0] ?? ['#ffffff', '#000000'];
+    const currentPalette = scene.palettes[currentPaletteIndex] ??
+      scene.palettes[0] ?? ['#ffffff', '#000000'];
     activePaletteOklab = currentPalette.map((c) => parseColorToOklab(c));
     paletteStopCount = Math.min(8, currentPalette.length);
 
@@ -194,6 +195,13 @@ export function createRenderer(options: RendererOptions): Renderer {
       targetPointerY = y;
       pointerActive = true;
       lastPointerTime = clock.now();
+
+      const hit = hitTestScreen(x, y);
+      const actionList =
+        hit === 'object' ? currentScene.onClick.object : currentScene.onClick.background;
+      for (let i = 0; i < actionList.length; i++) {
+        executeAction(actionList[i]!);
+      }
     },
     onPointerLeave(): void {
       pointerActive = false;
@@ -250,6 +258,21 @@ export function createRenderer(options: RendererOptions): Renderer {
 
     const now = timeMs !== undefined ? timeMs : clock.now();
     const timeSec = now * 0.001;
+
+    // Step palette spring physics in OKLab
+    const dt = Math.max(0, (now - lastAnimTime) * 0.001);
+    lastAnimTime = now;
+    stepPaletteSprings(paletteSprings, paletteStopCount, dt);
+
+    for (let i = 0; i < paletteStopCount; i++) {
+      const s = paletteSprings[i]!;
+      oklabToLinearSrgb(s.L, s.a, s.b, tempLinearRgb);
+      const baseIdx = i * 4;
+      paletteBuffer[baseIdx] = tempLinearRgb[0];
+      paletteBuffer[baseIdx + 1] = tempLinearRgb[1];
+      paletteBuffer[baseIdx + 2] = tempLinearRgb[2];
+      paletteBuffer[baseIdx + 3] = s.alpha;
+    }
 
     // Handle idle pointer orbit
     const timeSinceLastPointer = now - lastPointerTime;
@@ -509,6 +532,18 @@ export function createRenderer(options: RendererOptions): Renderer {
 
     getUniformValues(): Readonly<UniformState> {
       return currentUniforms;
+    },
+
+    handleClick(x: number, y: number): 'object' | 'background' {
+      return hitTestScreen(x, y);
+    },
+
+    getActivePaletteIndex(): number {
+      return currentPaletteIndex;
+    },
+
+    triggerAction(actionId: string): void {
+      executeAction({ action: actionId });
     },
   };
 }
