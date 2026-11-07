@@ -2,6 +2,18 @@
 
 All notable changes to the Glowframe monorepo are documented in this file.
 
+## [v0.3.0] - M3: Cursor Light, Smoothing, and Idle Orbit
+
+### Added
+
+- **M3: Interactive Cursor Light**:
+  - Implemented pointer tracking with configurable smoothing factor (`scene.interaction.smoothing`).
+  - Implemented automatic idle detection: after 3 seconds of inactivity (`idleTimeoutMs`), the cursor light smoothly eases into an automatic circular orbit around the shape centroid.
+  - Implemented instant recovery from idle mode as soon as pointer input resumes.
+  - Directional specular edge illumination where normals facing the cursor catch bright prism reflections.
+  - Added unit test suite in `packages/core/src/__tests__/input.test.ts` verifying `BrowserInput` coordinate normalization and cleanup.
+  - Added e2e test suite in `packages/core/src/__tests__/cursor.e2e.test.ts` driving a fake `InputSource` with injectable `ManualClock` asserting smoothed transitions, idle orbit initiation at 3s, uniform values (`u_cursorPos`, `u_hasCursor`), and directional rim brightness differential.
+
 ## [v0.2.0] - M2: Core v0 - Triangle with Static WebGL2 Glow
 
 ### Added

@@ -1,5 +1,5 @@
 import { Scene, parseScene } from '@glowframe/schema';
-import type { Renderer, RendererOptions, InputSource, Clock } from './types.js';
+import type { Renderer, RendererOptions, InputSource, Clock, UniformState } from './types.js';
 import { SystemClock } from './clock.js';
 import { NoopInput } from './input/noop.js';
 import { getWebGL2Context } from './gl/context.js';
@@ -52,6 +52,7 @@ export function createRenderer(options: RendererOptions): Renderer {
   let currentPointerX = 0.5;
   let currentPointerY = 0.5;
   let lastPointerTime = clock.now();
+  let isOrbiting = false;
 
   // Pre-allocated flat buffers for uniform upload (ZERO allocations inside render loop)
   const paletteBuffer = new Float32Array(32); // 8 vec4s
@@ -59,6 +60,23 @@ export function createRenderer(options: RendererOptions): Renderer {
   const bgColorBuffer = new Float32Array(3);
   let activePaletteOklab: ColorOKLab[] = [];
   let paletteStopCount = 0;
+
+  // Pre-allocated uniform state tracking (for tests and inspection without GC pressure)
+  const currentUniforms: UniformState = {
+    u_cursorPos: [0.5, 0.5],
+    u_hasCursor: 0,
+    u_cursorSharpness: 3.0,
+    u_hazeIntensity: 0.6,
+    u_shapePos: [0.5, 0.52],
+    u_shapeScale: 0.28,
+    u_shapeRotation: 0,
+    u_maxDistance: 96,
+    u_edgeWidth: 0.004,
+    u_edgeFalloff: 0.09,
+    u_edgeIntensity: 1.0,
+    u_edgeDispersion: 0.35,
+    u_time: 0,
+  };
 
   // WebGL resources
   let gl: WebGL2RenderingContext = getWebGL2Context(canvas);
@@ -188,6 +206,7 @@ export function createRenderer(options: RendererOptions): Renderer {
     const idleTimeout = currentScene.interaction.idleTimeoutMs ?? 3000;
     const shouldIdleOrbit =
       currentScene.interaction.idleOrbit && (!pointerActive || timeSinceLastPointer > idleTimeout);
+    isOrbiting = shouldIdleOrbit;
 
     if (shouldIdleOrbit) {
       const orbitSpeed = 0.8;
@@ -202,6 +221,26 @@ export function createRenderer(options: RendererOptions): Renderer {
     const smoothing = currentScene.interaction.smoothing;
     currentPointerX += (targetPointerX - currentPointerX) * smoothing;
     currentPointerY += (targetPointerY - currentPointerY) * smoothing;
+
+    const hasCursor =
+      currentScene.interaction.followCursor && (pointerActive || shouldIdleOrbit) ? 1.0 : 0.0;
+
+    // Record uniforms
+    currentUniforms.u_cursorPos[0] = currentPointerX;
+    currentUniforms.u_cursorPos[1] = currentPointerY;
+    currentUniforms.u_hasCursor = hasCursor;
+    currentUniforms.u_cursorSharpness = currentScene.interaction.sharpness;
+    currentUniforms.u_hazeIntensity = currentScene.background.haze.intensity;
+    currentUniforms.u_shapePos[0] = currentScene.shape.position[0];
+    currentUniforms.u_shapePos[1] = currentScene.shape.position[1];
+    currentUniforms.u_shapeScale = currentScene.shape.scale;
+    currentUniforms.u_shapeRotation = (currentScene.shape.rotation * Math.PI) / 180;
+    currentUniforms.u_maxDistance = shapePipeline.sdf.maxDistance;
+    currentUniforms.u_edgeWidth = currentScene.edge.width;
+    currentUniforms.u_edgeFalloff = currentScene.edge.falloff;
+    currentUniforms.u_edgeIntensity = currentScene.edge.intensity;
+    currentUniforms.u_edgeDispersion = currentScene.edge.dispersion;
+    currentUniforms.u_time = timeSec;
 
     gl.viewport(0, 0, canvas.width, canvas.height);
     gl.clearColor(0.0, 0.0, 0.0, 1.0);
@@ -404,6 +443,22 @@ export function createRenderer(options: RendererOptions): Renderer {
 
     get currentScene(): Scene {
       return currentScene;
+    },
+
+    getCursorPosition(): [number, number] {
+      return [currentPointerX, currentPointerY];
+    },
+
+    getTargetCursorPosition(): [number, number] {
+      return [targetPointerX, targetPointerY];
+    },
+
+    isIdleOrbitActive(): boolean {
+      return isOrbiting;
+    },
+
+    getUniformValues(): Readonly<UniformState> {
+      return currentUniforms;
     },
   };
 }

@@ -22,6 +22,22 @@ export interface RendererOptions {
   clock?: Clock;
 }
 
+export interface UniformState {
+  u_cursorPos: [number, number];
+  u_hasCursor: number;
+  u_cursorSharpness: number;
+  u_hazeIntensity: number;
+  u_shapePos: [number, number];
+  u_shapeScale: number;
+  u_shapeRotation: number;
+  u_maxDistance: number;
+  u_edgeWidth: number;
+  u_edgeFalloff: number;
+  u_edgeIntensity: number;
+  u_edgeDispersion: number;
+  u_time: number;
+}
+
 export interface Renderer {
   start(): void;
   stop(): void;
@@ -32,8 +48,13 @@ export interface Renderer {
   resize(width: number, height: number, devicePixelRatio?: number): void;
   renderFrame(timeMs?: number): void;
   dispose(): void;
-  // Read-only inspection methods for tests
+
+  // Read-only inspection methods for tests & telemetry
   readonly isRunning: boolean;
   readonly isPaused: boolean;
   readonly currentScene: Scene;
+  getCursorPosition(): [number, number];
+  getTargetCursorPosition(): [number, number];
+  isIdleOrbitActive(): boolean;
+  getUniformValues(): Readonly<UniformState>;
 }
