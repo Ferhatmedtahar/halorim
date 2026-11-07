@@ -1,0 +1,24 @@
+{
+  "name": "glowframe",
+  "private": true,
+  "packageManager": "pnpm@10.27.0",
+  "scripts": {
+    "build": "turbo run build",
+    "test": "turbo run test",
+    "lint": "turbo run lint && pnpm run depcruise",
+    "typecheck": "turbo run typecheck",
+    "format": "prettier --write \"**/*.{ts,tsx,js,json,md,yml,yaml}\"",
+    "format:check": "prettier --check \"**/*.{ts,tsx,js,json,md,yml,yaml}\"",
+    "depcruise": "depcruise packages apps tooling"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.65.0",
+    "dependency-cruiser": "18.7.2",
+    "eslint": "10.14.0",
+    "prettier": "3.9.10",
+    "turbo": "2.11.10",
+    "typescript": "5.8.2",
+    "typescript-eslint": "8.72.1",
+    "vitest": "5.1.0"
+  }
+}
