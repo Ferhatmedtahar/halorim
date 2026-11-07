@@ -28,3 +28,15 @@ export {
   type ColorStopSpring,
   type SpringConfig,
 } from './color/spring.js';
+export {
+  BASE_MODES,
+  CLICK_ACTIONS,
+  ALL_BASE_MODE_IDS,
+  ALL_CLICK_ACTION_IDS,
+  type EffectContext,
+  type ModeUniforms,
+  type BaseModeDefinition,
+  type ClickActionDefinition,
+  type ActiveRipple,
+  type ActiveBurst,
+} from './effects/index.js';

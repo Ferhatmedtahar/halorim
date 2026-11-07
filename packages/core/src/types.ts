@@ -36,6 +36,13 @@ export interface UniformState {
   u_edgeIntensity: number;
   u_edgeDispersion: number;
   u_time: number;
+  u_rotationSpeed: number;
+  u_pulseFactor: number;
+  u_hueShift: number;
+  u_flickerFactor: number;
+  u_sweep: [number, number, number, number];
+  u_ripple: [number, number, number, number];
+  u_burstFactor: number;
 }
 
 export interface Renderer {
@@ -59,5 +66,12 @@ export interface Renderer {
   getUniformValues(): Readonly<UniformState>;
   handleClick(x: number, y: number): 'object' | 'background';
   getActivePaletteIndex(): number;
-  triggerAction(actionId: string): void;
+  getActiveMode(): string;
+  setMode(id: string, params?: Record<string, unknown>): void;
+  triggerAction(
+    actionId: string,
+    params?: Record<string, unknown>,
+    origin?: [number, number],
+  ): void;
+  isContentVisible(): boolean;
 }

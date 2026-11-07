@@ -43,3 +43,4 @@ export { SceneValidationError, UnsupportedVersionError } from './errors.js';
 export { migrate, parseScene, safeParseScene } from './migrate.js';
 export { exportJsonSchema } from './export-json-schema.js';
 export { exampleScene } from './example.js';
+export { z } from 'zod';

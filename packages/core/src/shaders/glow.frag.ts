@@ -24,6 +24,12 @@ uniform vec2 u_cursorPos;         // Normalized cursor position [0..1]
 uniform float u_cursorSharpness;  // Specular light focus
 uniform float u_hazeIntensity;    // Background haze intensity
 uniform float u_hasCursor;        // 1.0 if cursor active, 0.0 otherwise
+uniform float u_pulseFactor;      // Base mode: pulse multiplier (1.0 default)
+uniform float u_hueShift;         // Base mode: spectrum-cycle hue offset (0.0 default)
+uniform float u_flickerFactor;    // Base mode: neon flicker multiplier (1.0 default)
+uniform vec4 u_sweep;             // Base mode: sweep [angle, width, intensity, active]
+uniform vec4 u_ripple;            // Click effect: ripple [originU, originV, radius, intensity]
+uniform float u_burstFactor;      // Click effect: burst flash multiplier (0.0 default)
 
 vec3 samplePalette(float t) {
   if (u_paletteCount <= 1) return u_palette[0].rgb;
@@ -79,7 +85,7 @@ void main() {
   // Edge prism color mapped via angle around shape center
   vec2 centerDiff = shapeUv - vec2(0.5);
   float angle = (length(centerDiff) > 0.00001) ? atan(centerDiff.y, centerDiff.x) : 0.0;
-  float normAngle = fract((angle / 6.28318530718) + 0.5 + u_time * u_rotationSpeed);
+  float normAngle = fract((angle / 6.28318530718) + 0.5 + u_time * u_rotationSpeed + u_hueShift);
 
   // Chromatic dispersion for prism effect
   float disp = u_edgeDispersion * 0.035;
@@ -88,10 +94,27 @@ void main() {
   float bColor = samplePalette(normAngle + disp).b;
   vec3 edgeColor = vec3(rColor, gColor, bColor);
 
-  // Core line and exponential glow
+  // Core line and exponential glow with pulse, flicker, and burst modulations
   float safeFalloff = max(u_edgeFalloff, 0.001);
-  float glow = exp(-max(d, 0.0) / safeFalloff) * u_edgeIntensity;
+  float modeIntensity = u_edgeIntensity * u_pulseFactor * u_flickerFactor + u_burstFactor;
+  float glow = exp(-max(d, 0.0) / safeFalloff) * modeIntensity;
   float core = smoothstep(u_edgeWidth, 0.0, abs(d));
+
+  // Sweep highlight beam
+  float sweepBeam = 0.0;
+  if (u_sweep.w > 0.5) {
+    float dAngle = abs(normAngle - u_sweep.x);
+    dAngle = min(dAngle, 1.0 - dAngle);
+    sweepBeam = exp(-(dAngle * dAngle) / max(u_sweep.y * u_sweep.y, 0.0001)) * u_sweep.z;
+  }
+
+  // Transient ripple wave
+  float rippleWave = 0.0;
+  if (u_ripple.w > 0.001) {
+    float clickDist = length(shapeUv - u_ripple.xy);
+    float waveDist = abs(clickDist - u_ripple.z);
+    rippleWave = exp(-(waveDist * waveDist) / 0.0015) * u_ripple.w;
+  }
 
   // Cursor directional illumination
   vec2 cursorDiff = v_uv - u_cursorPos;
@@ -118,8 +141,8 @@ void main() {
     // Interior is solid fill (default pure black)
     linearColor = u_fillColor;
   } else {
-    // Outside: edge prism glow modulated by cursor light and ambient haze
-    float rimFactor = glow + core * 1.5 + (cursorLight * glow);
+    // Outside: edge prism glow modulated by cursor light, sweep, ripple, and ambient haze
+    float rimFactor = glow + core * 1.5 + (cursorLight * glow) + (sweepBeam * glow) + rippleWave;
     linearColor = u_bgColor + (edgeColor * rimFactor) + vec3(haze);
   }
 

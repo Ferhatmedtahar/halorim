@@ -2,6 +2,35 @@
 
 All notable changes to the Glowframe monorepo are documented in this file.
 
+## [v0.5.0] - M5: Modes and Effects Catalog
+
+### Added
+
+- **M5: Modes and Effects Catalog**:
+  - Implemented effect registry system (`packages/core/src/effects/`): each effect explicitly declares its unique `id`, Zod `paramSchema`, and GPU `uniforms`.
+  - Implemented all 7 base modes from Section 4:
+    - `glow`: Reference static rim prism glow from the Vercel hero.
+    - `pulse`: Sine-modulated breathing glow with configurable `speed` and `depth`.
+    - `rotate`: Continuous perimeter spectrum rotation at configurable `speed`.
+    - `spectrum-cycle`: Full-palette OKLCH hue shift cycling over time.
+    - `flicker`: Deterministic seeded neon flicker jitter using multi-frequency harmonic synthesis.
+    - `sweep`: Scanning highlight beam travelling along the perimeter at configurable `speed`, `width`, and `intensity`.
+    - `orbit`: Virtual light orbiting the shape along a circular trajectory.
+  - Implemented all 7 click actions from Section 4:
+    - `next-palette`: Cycles to the next palette in `palettes[]` with smooth OKLab spring transitions.
+    - `random-palette`: Generates harmonious randomized palettes in OKLCH.
+    - `ripple`: Radial wave travelling outwards along the rim from the exact click coordinate with decaying intensity.
+    - `burst`: Instant glow intensity flash decaying exponentially ($B(t) = I \times \exp(-\lambda t)$).
+    - `next-mode`: Runtime base mode cycling through all modes.
+    - `toggle-content`: Toggles center content visibility flag.
+    - `none`: Explicit no-op handler.
+  - Zero per-frame allocations in render loop across all modes, using pre-allocated typed arrays for uniform uploads.
+  - Added unit test suite in `packages/core/src/__tests__/modes.test.ts` (15 tests) verifying param schema validation, mode mathematical evaluations, and runtime mode/action state transitions.
+  - Added headless WebGL2 Playwright e2e test suite in `packages/core/src/__tests__/modes.e2e.test.ts` (10 tests):
+    - Golden frame screenshots generated and verified at fixed time ($t=1000\text{ms}$) and seed for every base mode (`golden-mode-*.png`).
+    - 500 runtime mode switches stress-tested with zero WebGL errors (`NO_ERROR`) and zero memory leaks.
+    - WebGL validation of `pulse` breathing peak vs trough, `burst` flash and decay, and pure black interior preservation ($d < 0$).
+
 ## [v0.4.0] - M4: Click Hit-Testing and Spring-Animated OKLab Palettes
 
 ### Added

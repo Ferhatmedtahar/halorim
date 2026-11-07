@@ -48,12 +48,25 @@
   <canvas id="wallpaper-canvas"></canvas>
 
   <script type="module">
-    import { createRenderer, BrowserInput, exampleScene, ManualClock } from '../dist/index.js';
+    import {
+      createRenderer,
+      BrowserInput,
+      exampleScene,
+      ManualClock,
+      ALL_BASE_MODE_IDS,
+      ALL_CLICK_ACTION_IDS,
+      BASE_MODES,
+      CLICK_ACTIONS,
+    } from '../dist/index.js';
 
     window.createRenderer = createRenderer;
     window.BrowserInput = BrowserInput;
     window.exampleScene = exampleScene;
     window.ManualClock = ManualClock;
+    window.ALL_BASE_MODE_IDS = ALL_BASE_MODE_IDS;
+    window.ALL_CLICK_ACTION_IDS = ALL_CLICK_ACTION_IDS;
+    window.BASE_MODES = BASE_MODES;
+    window.CLICK_ACTIONS = CLICK_ACTIONS;
 
     const canvas = document.getElementById('wallpaper-canvas');
     const input = new BrowserInput(canvas);
