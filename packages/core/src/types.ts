@@ -57,4 +57,7 @@ export interface Renderer {
   getTargetCursorPosition(): [number, number];
   isIdleOrbitActive(): boolean;
   getUniformValues(): Readonly<UniformState>;
+  handleClick(x: number, y: number): 'object' | 'background';
+  getActivePaletteIndex(): number;
+  triggerAction(actionId: string): void;
 }

@@ -1,4 +1,4 @@
-import { Scene, parseScene } from '@glowframe/schema';
+import { Scene, parseScene, type ClickActionItem } from '@glowframe/schema';
 import type { Renderer, RendererOptions, InputSource, Clock, UniformState } from './types.js';
 import { SystemClock } from './clock.js';
 import { NoopInput } from './input/noop.js';
@@ -12,9 +12,16 @@ import { buildShapePipeline, type ShapePipelineResult } from './shape/pipeline.j
 import {
   parseColorToLinearSrgb,
   parseColorToOklab,
-  samplePaletteLinear,
+  oklabToLinearSrgb,
   type ColorOKLab,
 } from './color/oklch.js';
+import {
+  createPaletteSprings,
+  setSpringTargetsImmediate,
+  setSpringTargets,
+  stepPaletteSprings,
+  generateRandomPalette,
+} from './color/spring.js';
 
 export function createRenderer(options: RendererOptions): Renderer {
   const { canvas } = options;
@@ -52,12 +59,16 @@ export function createRenderer(options: RendererOptions): Renderer {
   let currentPointerX = 0.5;
   let currentPointerY = 0.5;
   let lastPointerTime = clock.now();
+  let lastAnimTime = clock.now();
   let isOrbiting = false;
+  let currentPaletteIndex = 0;
 
   // Pre-allocated flat buffers for uniform upload (ZERO allocations inside render loop)
   const paletteBuffer = new Float32Array(32); // 8 vec4s
   const fillColorBuffer = new Float32Array(3);
   const bgColorBuffer = new Float32Array(3);
+  const tempLinearRgb: [number, number, number] = [0, 0, 0];
+  const paletteSprings = createPaletteSprings(8);
   let activePaletteOklab: ColorOKLab[] = [];
   let paletteStopCount = 0;
 
@@ -91,7 +102,7 @@ export function createRenderer(options: RendererOptions): Renderer {
   );
 
   // Update color caches from scene
-  function refreshColors(scene: Scene): void {
+  function refreshColors(scene: Scene, immediate: boolean = true): void {
     const rawFill = parseColorToLinearSrgb(scene.fill.color);
     fillColorBuffer[0] = rawFill[0];
     fillColorBuffer[1] = rawFill[1];
@@ -102,21 +113,60 @@ export function createRenderer(options: RendererOptions): Renderer {
     bgColorBuffer[1] = rawBg[1];
     bgColorBuffer[2] = rawBg[2];
 
-    const currentPalette = scene.palettes[0] ?? ['#ffffff', '#000000'];
+    const currentPalette = scene.palettes[currentPaletteIndex] ?? scene.palettes[0] ?? ['#ffffff', '#000000'];
     activePaletteOklab = currentPalette.map((c) => parseColorToOklab(c));
     paletteStopCount = Math.min(8, currentPalette.length);
 
+    if (immediate) {
+      setSpringTargetsImmediate(paletteSprings, activePaletteOklab);
+    } else {
+      setSpringTargets(paletteSprings, activePaletteOklab);
+    }
+
     for (let i = 0; i < paletteStopCount; i++) {
-      const sample = samplePaletteLinear(activePaletteOklab, i / paletteStopCount);
+      const s = paletteSprings[i]!;
+      oklabToLinearSrgb(s.L, s.a, s.b, tempLinearRgb);
       const baseIdx = i * 4;
-      paletteBuffer[baseIdx] = sample[0];
-      paletteBuffer[baseIdx + 1] = sample[1];
-      paletteBuffer[baseIdx + 2] = sample[2];
-      paletteBuffer[baseIdx + 3] = sample[3];
+      paletteBuffer[baseIdx] = tempLinearRgb[0];
+      paletteBuffer[baseIdx + 1] = tempLinearRgb[1];
+      paletteBuffer[baseIdx + 2] = tempLinearRgb[2];
+      paletteBuffer[baseIdx + 3] = s.alpha;
     }
   }
 
-  refreshColors(currentScene);
+  refreshColors(currentScene, true);
+
+  function hitTestScreen(x: number, y: number): 'object' | 'background' {
+    const aspect = canvas.width / Math.max(canvas.height, 1);
+    const diffX = (x - currentScene.shape.position[0]) * aspect;
+    const diffY = y - currentScene.shape.position[1];
+    const rotRad = (currentScene.shape.rotation * Math.PI) / 180;
+    const cosR = Math.cos(-rotRad);
+    const sinR = Math.sin(-rotRad);
+    const rotX = diffX * cosR - diffY * sinR;
+    const rotY = diffX * sinR + diffY * cosR;
+    const safeScale = Math.max(currentScene.shape.scale, 0.001);
+    const shapeU = rotX / safeScale + 0.5;
+    const shapeV = rotY / safeScale + 0.5;
+    const distance = shapePipeline.hitTest(shapeU, shapeV);
+    return distance < 0 ? 'object' : 'background';
+  }
+
+  function executeAction(item: ClickActionItem): void {
+    if (item.action === 'next-palette') {
+      if (currentScene.palettes.length > 0) {
+        currentPaletteIndex = (currentPaletteIndex + 1) % currentScene.palettes.length;
+        const pal = currentScene.palettes[currentPaletteIndex]!;
+        activePaletteOklab = pal.map((c) => parseColorToOklab(c));
+        paletteStopCount = Math.min(8, activePaletteOklab.length);
+        setSpringTargets(paletteSprings, activePaletteOklab);
+      }
+    } else if (item.action === 'random-palette') {
+      activePaletteOklab = generateRandomPalette();
+      paletteStopCount = Math.min(8, activePaletteOklab.length);
+      setSpringTargets(paletteSprings, activePaletteOklab);
+    }
+  }
 
   // Apply canvas buffer dimensions
   function updateCanvasDimensions(): void {
