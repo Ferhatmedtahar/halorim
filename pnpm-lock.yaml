@@ -11,6 +11,9 @@ importers:
       '@playwright/test':
         specifier: 1.65.0
         version: 1.65.0
+      '@types/node':
+        specifier: 22.13.9
+        version: 22.13.9
       dependency-cruiser:
         specifier: 18.7.2
         version: 18.7.2
@@ -31,7 +34,23 @@ importers:
         version: 8.72.1(eslint@10.14.0)(typescript@5.8.2)
       vitest:
         specifier: 5.1.0
-        version: 5.1.0(vite@8.3.6(esbuild@0.25.12))
+        version: 5.1.0(@types/node@22.13.9)(vite@8.3.6(@types/node@22.13.9)(esbuild@0.25.12))
+
+  packages/core:
+    dependencies:
+      '@glowframe/schema':
+        specifier: workspace:*
+        version: link:../schema
+    devDependencies:
+      tsup:
+        specifier: 8.4.0
+        version: 8.4.0(postcss@8.5.32)(typescript@5.8.2)
+      typescript:
+        specifier: 5.8.2
+        version: 5.8.2
+      vitest:
+        specifier: 5.1.0
+        version: 5.1.0(@types/node@22.13.9)(vite@8.3.6(@types/node@22.13.9)(esbuild@0.25.12))
 
   packages/schema:
     dependencies:
@@ -50,7 +69,7 @@ importers:
         version: 5.8.2
       vitest:
         specifier: 5.1.0
-        version: 5.1.0(vite@8.3.6(esbuild@0.25.12))
+        version: 5.1.0(@types/node@22.13.9)(vite@8.3.6(@types/node@22.13.9)(esbuild@0.25.12))
 
 packages:
 
@@ -563,6 +582,9 @@ packages:
 
   '@types/json-schema@7.0.15':
     resolution: {integrity: sha512-5+fP8P8MFNC+AyZCDxrB2pkZFPGzqQWUzpSeuuVLvm8VMcorNYavBqoFcxK8bQz4Qsbn4oUEEem4wDLfcysGHA==}
+
+  '@types/node@22.13.9':
+    resolution: {integrity: sha512-acBjXdRJ3A6Pb3tqnw9HZmyR3Fiol3aGxRCK1x3d+6CDAMjl7I649wpSd+yNURCjbOUGu9tqtLKnTGxmK6CyGw==}
 
   '@typescript-eslint/eslint-plugin@8.72.1':
     resolution: {integrity: sha512-5CokTWXpmbylfFabsbvHC0CAw3XLaGnoa+nFJX5FR592h/LoZsENUE6p/rg5xvkKrFEXz6pYmgI29AgXc2N3BQ==}
@@ -1330,6 +1352,9 @@ packages:
     engines: {node: '>=14.17'}
     hasBin: true
 
+  undici-types@6.20.0:
+    resolution: {integrity: sha512-Ny6QZ2Nju20vw1SRHe3d9jVu6gJ+4e3+MMpqu7pqE5HT6WsTSlce++GQmK5UXS8mzV8DSYHrQH+Xrf2jVcuKNg==}
+
   uri-js@4.4.1:
     resolution: {integrity: sha512-7rKUyy33Q1yc98pQ1DAmLtwX109F7TIfWlW1Ydo8Wl1ii1SeHieeh0HHfPeL2fMXK6z0s8ecKs9frCuLJvndBg==}
 
@@ -1776,6 +1801,10 @@ snapshots:
 
   '@types/json-schema@7.0.15': {}
 
+  '@types/node@22.13.9':
+    dependencies:
+      undici-types: 6.20.0
+
   '@typescript-eslint/eslint-plugin@8.72.1(@typescript-eslint/parser@8.72.1(eslint@10.14.0)(typescript@5.8.2))(eslint@10.14.0)(typescript@5.8.2)':
     dependencies:
       '@eslint-community/regexpp': 4.12.2
@@ -1867,14 +1896,14 @@ snapshots:
       '@typescript-eslint/types': 8.72.1
       eslint-visitor-keys: 5.0.1
 
-  '@vitest/mocker@5.1.0(vite@8.3.6(esbuild@0.25.12))':
+  '@vitest/mocker@5.1.0(vite@8.3.6(@types/node@22.13.9)(esbuild@0.25.12))':
     dependencies:
       '@jridgewell/trace-mapping': 0.3.31
       '@vitest/spy': 5.1.0
       estree-walker: 3.0.3
       magic-string: 1.4.5
     optionalDependencies:
-      vite: 8.3.6(esbuild@0.25.12)
+      vite: 8.3.6(@types/node@22.13.9)(esbuild@0.25.12)
 
   '@vitest/spy@5.1.0': {}
 
@@ -2560,11 +2589,13 @@ snapshots:
 
   typescript@5.8.2: {}
 
+  undici-types@6.20.0: {}
+
   uri-js@4.4.1:
     dependencies:
       punycode: 2.3.1
 
-  vite@8.3.6(esbuild@0.25.12):
+  vite@8.3.6(@types/node@22.13.9)(esbuild@0.25.12):
     dependencies:
       lightningcss: 1.33.0
       picomatch: 4.0.7
@@ -2572,13 +2603,14 @@ snapshots:
       rolldown: 1.2.16
       tinyglobby: 0.2.17
     optionalDependencies:
+      '@types/node': 22.13.9
       esbuild: 0.25.12
       fsevents: 2.3.3
 
-  vitest@5.1.0(vite@8.3.6(esbuild@0.25.12)):
+  vitest@5.1.0(@types/node@22.13.9)(vite@8.3.6(@types/node@22.13.9)(esbuild@0.25.12)):
     dependencies:
       '@types/chai': 5.2.3
-      '@vitest/mocker': 5.1.0(vite@8.3.6(esbuild@0.25.12))
+      '@vitest/mocker': 5.1.0(vite@8.3.6(@types/node@22.13.9)(esbuild@0.25.12))
       chai: 6.3.0
       es-module-lexer: 2.3.2
       expect-type: 1.4.0
@@ -2589,8 +2621,10 @@ snapshots:
       tinybench: 6.2.3
       tinyexec: 1.3.1
       tinyglobby: 0.2.17
-      vite: 8.3.6(esbuild@0.25.12)
+      vite: 8.3.6(@types/node@22.13.9)(esbuild@0.25.12)
       why-is-node-running: 3.2.1
+    optionalDependencies:
+      '@types/node': 22.13.9
     transitivePeerDependencies:
       - msw
 

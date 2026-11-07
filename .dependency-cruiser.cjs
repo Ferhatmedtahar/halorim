@@ -17,9 +17,9 @@ module.exports = {
     },
     {
       name: 'core-no-platform-imports',
-      comment: 'packages/core must never import platform-specific or framework modules',
+      comment: 'packages/core source must never import platform-specific or framework modules',
       severity: 'error',
-      from: { path: '^packages/core' },
+      from: { path: '^packages/core/src/(?!__tests__/)' },
       to: {
         dependencyTypes: ['core'],
         path: '^(fs|fs/promises|path|child_process|cluster|os|http|https|net|tls|dgram)$',
