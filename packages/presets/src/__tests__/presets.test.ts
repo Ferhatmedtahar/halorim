@@ -6,6 +6,12 @@ import {
   hexagonScene,
   starScene,
   circleScene,
+  archScene,
+  infinityScene,
+  diamondScene,
+  hypercubeScene,
+  phantomScene,
+  debianScene,
   PRESET_SCENES,
   getPreset,
   ALL_PRESET_IDS,
@@ -13,10 +19,18 @@ import {
 import { parseScene } from '@glowframe/schema';
 
 describe('@glowframe/presets', () => {
-  it('exports at least 6 valid, parseable preset scenes', () => {
-    expect(ALL_PRESET_IDS.length).toBeGreaterThanOrEqual(6);
+  it('exports at least 10 valid, parseable preset scenes', () => {
+    expect(ALL_PRESET_IDS.length).toBeGreaterThanOrEqual(10);
+    expect(ALL_PRESET_IDS.length).toBe(12);
+
     expect(parseScene(triangleScene)).toBeDefined();
     expect(parseScene(tuxScene)).toBeDefined();
+    expect(parseScene(archScene)).toBeDefined();
+    expect(parseScene(debianScene)).toBeDefined();
+    expect(parseScene(infinityScene)).toBeDefined();
+    expect(parseScene(diamondScene)).toBeDefined();
+    expect(parseScene(hypercubeScene)).toBeDefined();
+    expect(parseScene(phantomScene)).toBeDefined();
     expect(parseScene(fourPaneScene)).toBeDefined();
     expect(parseScene(hexagonScene)).toBeDefined();
     expect(parseScene(starScene)).toBeDefined();

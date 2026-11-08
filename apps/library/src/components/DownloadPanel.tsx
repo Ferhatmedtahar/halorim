@@ -3,6 +3,10 @@
 import { useState } from 'react';
 import type { Scene } from '@glowframe/schema';
 import { exportPng, exportSceneJson, exportHtmlPack, PRESET_RESOLUTIONS } from '@glowframe/export';
+import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { Download, Sparkles, FileCode, Archive } from 'lucide-react';
 
 interface DownloadPanelProps {
   scene: Scene;
@@ -17,7 +21,7 @@ export default function DownloadPanel({ scene }: DownloadPanelProps) {
   const handleDownloadPng = async () => {
     try {
       setIsExportingPng(true);
-      setStatusMessage('Rendering high-res frame...');
+      setStatusMessage('Rendering high-resolution WebGL2 frame...');
 
       const res = PRESET_RESOLUTIONS[resolutionKey];
       const blob = await exportPng({
@@ -33,10 +37,10 @@ export default function DownloadPanel({ scene }: DownloadPanelProps) {
       a.download = `${scene.meta.id}-${res.width}x${res.height}.png`;
       a.click();
       URL.revokeObjectURL(url);
-      setStatusMessage('PNG downloaded!');
+      setStatusMessage('PNG still downloaded successfully.');
     } catch (err) {
       console.error('PNG export failed:', err);
-      setStatusMessage('Failed to export PNG');
+      setStatusMessage('Failed to export PNG.');
     } finally {
       setIsExportingPng(false);
       setTimeout(() => setStatusMessage(null), 3000);
@@ -53,18 +57,18 @@ export default function DownloadPanel({ scene }: DownloadPanelProps) {
       a.download = `${scene.meta.id}.glowframe.json`;
       a.click();
       URL.revokeObjectURL(url);
-      setStatusMessage('Scene file downloaded!');
+      setStatusMessage('Scene definition file downloaded.');
       setTimeout(() => setStatusMessage(null), 3000);
     } catch (err) {
       console.error('Scene export failed:', err);
-      setStatusMessage('Failed to export scene');
+      setStatusMessage('Failed to export scene file.');
     }
   };
 
   const handleDownloadHtmlPack = async () => {
     try {
       setIsExportingHtml(true);
-      setStatusMessage('Packaging offline wallpaper...');
+      setStatusMessage('Packaging offline standalone wallpaper...');
 
       let bundledCoreJs: string | undefined;
       try {
@@ -73,7 +77,7 @@ export default function DownloadPanel({ scene }: DownloadPanelProps) {
           bundledCoreJs = await res.text();
         }
       } catch {
-        // Fallback to CDN inside exportHtmlPack if local fetch fails
+        // Fallback to CDN inside exportHtmlPack
       }
 
       const zipBytes = await exportHtmlPack({
@@ -88,10 +92,10 @@ export default function DownloadPanel({ scene }: DownloadPanelProps) {
       a.download = `${scene.meta.id}-wallpaper.zip`;
       a.click();
       URL.revokeObjectURL(url);
-      setStatusMessage('HTML pack downloaded!');
+      setStatusMessage('HTML pack exported.');
     } catch (err) {
       console.error('HTML pack export failed:', err);
-      setStatusMessage('Failed to export HTML pack');
+      setStatusMessage('Failed to export HTML pack.');
     } finally {
       setIsExportingHtml(false);
       setTimeout(() => setStatusMessage(null), 3000);
@@ -99,85 +103,108 @@ export default function DownloadPanel({ scene }: DownloadPanelProps) {
   };
 
   return (
-    <div className="bg-[#12141c] border border-white/10 rounded-2xl p-6 flex flex-col gap-6">
-      <div>
-        <h3 className="text-base font-bold text-white mb-1">Download Wallpaper</h3>
-        <p className="text-xs text-slate-400">
-          Export as still artwork, portable desktop scene, or an offline interactive pack.
-        </p>
-      </div>
-
-      {statusMessage && (
-        <div className="text-xs px-3 py-2 rounded-lg bg-cyan-950/40 border border-cyan-800/40 text-cyan-300 animate-fade-in">
-          {statusMessage}
-        </div>
-      )}
-
-      {/* Option 1: PNG Still Image */}
-      <div className="flex flex-col gap-3 p-4 rounded-xl bg-white/[0.02] border border-white/5">
+    <Card className="font-mono">
+      <CardHeader className="py-3">
         <div className="flex items-center justify-between">
+          <CardTitle className="text-xs">
+            <Download className="w-3.5 h-3.5 text-terminal-cyan" />
+            EXPORT_WALLPAPER
+          </CardTitle>
+          <Badge variant="cyan" bracketed>READY</Badge>
+        </div>
+        <p className="text-[11px] text-terminal-dim mt-1">
+          Export as 4K still frame, standalone offline ZIP, or desktop scene format.
+        </p>
+      </CardHeader>
+
+      <CardContent className="flex flex-col gap-4 pt-3">
+        {statusMessage && (
+          <div className="text-[11px] px-3 py-2 bg-terminal-cyan/10 border border-terminal-cyan/40 text-terminal-cyan flex items-center gap-1.5 shadow-terminal-glow">
+            <span>&gt;_ {statusMessage}</span>
+          </div>
+        )}
+
+        {/* Option 1: PNG Still Image */}
+        <div className="p-3 border border-terminal-border bg-terminal-bg flex flex-col gap-2.5">
+          <div className="flex items-center justify-between">
+            <div>
+              <div className="text-xs font-semibold text-slate-200 flex items-center gap-1.5">
+                <Sparkles className="w-3 h-3 text-terminal-cyan" />
+                STILL IMAGE (PNG)
+              </div>
+              <div className="text-[10px] text-terminal-dim">
+                High-res frame rendered via WebGL2
+              </div>
+            </div>
+            <select
+              value={resolutionKey}
+              onChange={(e) => setResolutionKey(e.target.value as keyof typeof PRESET_RESOLUTIONS)}
+              className="bg-terminal-card border border-terminal-border text-[11px] text-slate-200 px-2 py-1 font-mono focus:outline-none focus:border-terminal-cyan"
+            >
+              {Object.entries(PRESET_RESOLUTIONS).map(([key, res]) => (
+                <option key={key} value={key}>
+                  {res.label}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <Button
+            variant="terminal"
+            size="sm"
+            onClick={handleDownloadPng}
+            disabled={isExportingPng}
+            className="w-full mt-1"
+          >
+            {isExportingPng ? 'Rendering...' : 'Download PNG Still'}
+          </Button>
+        </div>
+
+        {/* Option 2: Standalone HTML Pack (.zip) */}
+        <div className="p-3 border border-terminal-border bg-terminal-bg flex flex-col gap-2.5">
           <div>
-            <div className="text-sm font-semibold text-white">Still Image (PNG)</div>
-            <div className="text-[11px] text-slate-400">
-              High-resolution frame rendered directly from WebGL2
+            <div className="text-xs font-semibold text-slate-200 flex items-center gap-1.5">
+              <Archive className="w-3 h-3 text-terminal-green" />
+              STANDALONE HTML PACK (.ZIP)
+            </div>
+            <div className="text-[10px] text-terminal-dim mt-0.5">
+              Offline interactive bundle. Works with Lively Wallpaper, WebViews, and browsers.
             </div>
           </div>
-          <select
-            value={resolutionKey}
-            onChange={(e) => setResolutionKey(e.target.value as keyof typeof PRESET_RESOLUTIONS)}
-            className="bg-[#1a1d29] border border-white/10 rounded-lg text-xs text-slate-200 px-2.5 py-1.5 focus:outline-none focus:border-cyan-500"
+
+          <Button
+            variant="cyber"
+            size="sm"
+            onClick={handleDownloadHtmlPack}
+            disabled={isExportingHtml}
+            className="w-full"
           >
-            {Object.entries(PRESET_RESOLUTIONS).map(([key, res]) => (
-              <option key={key} value={key}>
-                {res.label}
-              </option>
-            ))}
-          </select>
+            {isExportingHtml ? 'Packaging...' : 'Download HTML Pack (.zip)'}
+          </Button>
         </div>
 
-        <button
-          onClick={handleDownloadPng}
-          disabled={isExportingPng}
-          className="w-full mt-1 py-2 px-4 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 hover:border-white/20 text-xs font-semibold text-white transition-all disabled:opacity-50"
-        >
-          {isExportingPng ? 'Rendering...' : 'Download PNG Still'}
-        </button>
-      </div>
-
-      {/* Option 2: Standalone HTML Pack (.zip) */}
-      <div className="flex flex-col gap-3 p-4 rounded-xl bg-white/[0.02] border border-white/5">
-        <div>
-          <div className="text-sm font-semibold text-white">Standalone HTML Pack (.zip)</div>
-          <div className="text-[11px] text-slate-400 mt-0.5">
-            Offline interactive package. Ready for Lively Wallpaper, webviews, and browsers.
+        {/* Option 3: Scene JSON (.glowframe.json) */}
+        <div className="p-3 border border-terminal-border bg-terminal-bg flex flex-col gap-2.5">
+          <div>
+            <div className="text-xs font-semibold text-slate-200 flex items-center gap-1.5">
+              <FileCode className="w-3 h-3 text-terminal-amber" />
+              DESKTOP SCENE (.GLOWFRAME.JSON)
+            </div>
+            <div className="text-[10px] text-terminal-dim mt-0.5">
+              Native format for the Glowframe Linux / Windows desktop tray engine.
+            </div>
           </div>
+
+          <Button
+            variant="amber"
+            size="sm"
+            onClick={handleDownloadScene}
+            className="w-full"
+          >
+            Download .glowframe.json
+          </Button>
         </div>
-
-        <button
-          onClick={handleDownloadHtmlPack}
-          disabled={isExportingHtml}
-          className="w-full py-2 px-4 rounded-xl bg-gradient-to-r from-cyan-500 to-indigo-600 hover:from-cyan-400 hover:to-indigo-500 text-xs font-semibold text-white shadow-lg shadow-cyan-950/50 transition-all disabled:opacity-50"
-        >
-          {isExportingHtml ? 'Packaging...' : 'Download HTML Pack (.zip)'}
-        </button>
-      </div>
-
-      {/* Option 3: Scene JSON (.glowframe.json) */}
-      <div className="flex flex-col gap-3 p-4 rounded-xl bg-white/[0.02] border border-white/5">
-        <div>
-          <div className="text-sm font-semibold text-white">Wallpaper File (.glowframe.json)</div>
-          <div className="text-[11px] text-slate-400 mt-0.5">
-            Native scene format for the Glowframe desktop engine and Tauri runner.
-          </div>
-        </div>
-
-        <button
-          onClick={handleDownloadScene}
-          className="w-full py-2 px-4 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 hover:border-white/20 text-xs font-semibold text-white transition-all"
-        >
-          Download .glowframe.json
-        </button>
-      </div>
-    </div>
+      </CardContent>
+    </Card>
   );
 }

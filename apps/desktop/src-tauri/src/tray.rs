@@ -29,7 +29,13 @@ struct PausedPayload {
 pub fn create_tray(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
     // 1. Presets Submenu
     let preset_triangle = MenuItem::with_id(app, "preset_triangle", "Triangle Prism", true, None::<&str>)?;
-    let preset_tux = MenuItem::with_id(app, "preset_tux", "Tux Prism", true, None::<&str>)?;
+    let preset_tux = MenuItem::with_id(app, "preset_tux", "Tux Linux Mascot", true, None::<&str>)?;
+    let preset_arch = MenuItem::with_id(app, "preset_arch", "Arch Linux Apex", true, None::<&str>)?;
+    let preset_debian = MenuItem::with_id(app, "preset_debian", "Debian Swirl", true, None::<&str>)?;
+    let preset_infinity = MenuItem::with_id(app, "preset_infinity", "Infinity Loop", true, None::<&str>)?;
+    let preset_diamond = MenuItem::with_id(app, "preset_diamond", "Diamond Facet", true, None::<&str>)?;
+    let preset_hypercube = MenuItem::with_id(app, "preset_hypercube", "Tesseract Hypercube", true, None::<&str>)?;
+    let preset_phantom = MenuItem::with_id(app, "preset_phantom", "Phantom Arcade", true, None::<&str>)?;
     let preset_fourpane = MenuItem::with_id(app, "preset_fourpane", "Four-Pane", true, None::<&str>)?;
     let preset_hexagon = MenuItem::with_id(app, "preset_hexagon", "Hexagon Prism", true, None::<&str>)?;
     let preset_cyber = MenuItem::with_id(app, "preset_cyber", "Cyber Star", true, None::<&str>)?;
@@ -42,6 +48,12 @@ pub fn create_tray(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
         &[
             &preset_triangle,
             &preset_tux,
+            &preset_arch,
+            &preset_debian,
+            &preset_infinity,
+            &preset_diamond,
+            &preset_hypercube,
+            &preset_phantom,
             &preset_fourpane,
             &preset_hexagon,
             &preset_cyber,
@@ -102,6 +114,24 @@ pub fn create_tray(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
                 }
                 "preset_tux" => {
                     let _ = app_handle.emit("glowframe://set-scene", ScenePayload { preset_id: "tux-prism" });
+                }
+                "preset_arch" => {
+                    let _ = app_handle.emit("glowframe://set-scene", ScenePayload { preset_id: "arch-prism" });
+                }
+                "preset_debian" => {
+                    let _ = app_handle.emit("glowframe://set-scene", ScenePayload { preset_id: "debian-swirl" });
+                }
+                "preset_infinity" => {
+                    let _ = app_handle.emit("glowframe://set-scene", ScenePayload { preset_id: "infinity-loop" });
+                }
+                "preset_diamond" => {
+                    let _ = app_handle.emit("glowframe://set-scene", ScenePayload { preset_id: "diamond-prism" });
+                }
+                "preset_hypercube" => {
+                    let _ = app_handle.emit("glowframe://set-scene", ScenePayload { preset_id: "hypercube" });
+                }
+                "preset_phantom" => {
+                    let _ = app_handle.emit("glowframe://set-scene", ScenePayload { preset_id: "retro-ghost" });
                 }
                 "preset_fourpane" => {
                     let _ = app_handle.emit("glowframe://set-scene", ScenePayload { preset_id: "four-pane" });

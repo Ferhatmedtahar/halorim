@@ -3,6 +3,10 @@ import Link from 'next/link';
 import { PRESET_SCENES } from '@glowframe/presets';
 import WallpaperPlayer from '@/components/WallpaperPlayer';
 import DownloadPanel from '@/components/DownloadPanel';
+import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Terminal, Sliders, ArrowLeft, ShieldCheck } from 'lucide-react';
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -21,15 +25,21 @@ export default async function WallpaperDetailPage({ params }: PageProps) {
   }
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 font-mono">
       {/* Back link */}
-      <div className="mb-6">
+      <div className="mb-6 flex items-center justify-between">
         <Link
           href="/"
-          className="text-xs font-medium text-slate-400 hover:text-white transition-colors inline-flex items-center gap-1.5"
+          className="text-xs text-terminal-cyan hover:underline inline-flex items-center gap-1.5"
         >
-          <span>&larr;</span> Back to Gallery
+          <ArrowLeft className="w-3.5 h-3.5" />
+          <span>&gt;_ Back to Gallery</span>
         </Link>
+
+        <div className="flex items-center gap-2">
+          <Badge variant="cyan" bracketed>ID: {scene.meta.id}</Badge>
+          <Badge variant="green" bracketed>ONLINE</Badge>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -38,62 +48,78 @@ export default async function WallpaperDetailPage({ params }: PageProps) {
           <WallpaperPlayer scene={scene} />
 
           {/* Preset Details & Attribution */}
-          <div className="bg-[#12141c] border border-white/10 rounded-2xl p-6">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-white/5 pb-4 mb-4">
-              <div>
-                <h1 className="text-2xl font-extrabold text-white">{scene.meta.name}</h1>
-                <p className="text-xs text-slate-400 mt-1">{scene.meta.description}</p>
+          <Card>
+            <CardHeader className="py-3">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div>
+                  <CardTitle className="text-base text-slate-100 flex items-center gap-2">
+                    <Terminal className="w-4 h-4 text-terminal-cyan" />
+                    {scene.meta.name}
+                  </CardTitle>
+                  <p className="text-xs text-terminal-dim mt-1">{scene.meta.description}</p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Badge variant="amber" bracketed>{scene.mode.id}</Badge>
+                  <Badge variant="outline" bracketed>{scene.shape.type}</Badge>
+                </div>
               </div>
-              <div className="flex items-center gap-2">
-                <span className="px-3 py-1 rounded-full text-xs font-semibold bg-cyan-500/10 text-cyan-400 border border-cyan-500/20">
-                  {scene.mode.id}
-                </span>
-                <span className="px-3 py-1 rounded-full text-xs font-semibold bg-white/5 text-slate-300 border border-white/10">
-                  {scene.shape.type}
-                </span>
-              </div>
-            </div>
+            </CardHeader>
 
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-xs">
-              <div>
-                <span className="text-slate-500 block mb-0.5">Author</span>
-                <span className="text-slate-200 font-medium">{scene.meta.author}</span>
+            <CardContent className="pt-4">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-xs border-b border-terminal-border/60 pb-4 mb-4">
+                <div>
+                  <span className="text-terminal-dim block mb-0.5 text-[10px]">AUTHOR</span>
+                  <span className="text-slate-200 font-medium">{scene.meta.author}</span>
+                </div>
+                <div>
+                  <span className="text-terminal-dim block mb-0.5 text-[10px]">LICENSE</span>
+                  <span className="text-slate-200 font-medium">{scene.meta.license}</span>
+                </div>
+                <div>
+                  <span className="text-terminal-dim block mb-0.5 text-[10px]">SHARPNESS</span>
+                  <span className="text-slate-200 font-medium">
+                    {scene.interaction.sharpness.toFixed(1)}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-terminal-dim block mb-0.5 text-[10px]">TARGET_FPS</span>
+                  <span className="text-terminal-green font-medium">{scene.performance.fpsCap} FPS</span>
+                </div>
               </div>
-              <div>
-                <span className="text-slate-500 block mb-0.5">License</span>
-                <span className="text-slate-200 font-medium">{scene.meta.license}</span>
-              </div>
-              <div>
-                <span className="text-slate-500 block mb-0.5">Light Sharpness</span>
-                <span className="text-slate-200 font-medium">
-                  {scene.interaction.sharpness.toFixed(1)}
-                </span>
-              </div>
-              <div>
-                <span className="text-slate-500 block mb-0.5">Target FPS</span>
-                <span className="text-slate-200 font-medium">{scene.performance.fpsCap} fps</span>
-              </div>
-            </div>
 
-            {/* Default Color Palette Swatches */}
-            <div className="mt-6 pt-4 border-t border-white/5">
-              <span className="text-xs text-slate-400 font-medium block mb-2">
-                Active Color Palette
-              </span>
-              <div className="flex items-center gap-2">
-                {scene.palettes[0]?.map((color, idx) => (
-                  <div key={idx} className="flex items-center gap-1.5">
-                    <div
-                      className="w-5 h-5 rounded-full border border-white/20 shadow-sm"
-                      style={{ backgroundColor: color }}
-                      title={`Stop ${idx + 1}: ${color}`}
-                    />
-                    <span className="text-[10px] font-mono text-slate-400">{color}</span>
-                  </div>
-                ))}
+              {/* Default Color Palette Swatches */}
+              <div>
+                <span className="text-[10px] text-terminal-dim block mb-2">
+                  PRIMARY_OPTICAL_PALETTE:
+                </span>
+                <div className="flex flex-wrap items-center gap-2">
+                  {scene.palettes[0]?.map((color, idx) => (
+                    <div key={idx} className="flex items-center gap-1.5 border border-terminal-border bg-terminal-bg px-2 py-1">
+                      <div
+                        className="w-3.5 h-3.5 rounded-full border border-black/40 shadow-sm"
+                        style={{ backgroundColor: color }}
+                        title={`Stop ${idx + 1}: ${color}`}
+                      />
+                      <span className="text-[10px] text-slate-400">{color}</span>
+                    </div>
+                  ))}
+                </div>
               </div>
-            </div>
-          </div>
+
+              {/* Transform in Custom Studio CTA */}
+              <div className="mt-6 pt-4 border-t border-terminal-border/40 flex items-center justify-between">
+                <span className="text-[11px] text-terminal-dim">
+                  Want to modify scale, rotation, or glow parameters?
+                </span>
+                <Link href="/studio">
+                  <Button variant="cyber" size="sm" className="flex items-center gap-1.5">
+                    <Sliders className="w-3 h-3" />
+                    <span>OPEN_IN_STUDIO</span>
+                  </Button>
+                </Link>
+              </div>
+            </CardContent>
+          </Card>
         </div>
 
         {/* Sidebar: Downloads & Instructions */}
@@ -101,28 +127,39 @@ export default async function WallpaperDetailPage({ params }: PageProps) {
           <DownloadPanel scene={scene} />
 
           {/* Quick Setup Card */}
-          <div className="bg-[#12141c] border border-white/10 rounded-2xl p-6 text-xs text-slate-400">
-            <h4 className="font-semibold text-white mb-2">How to use this wallpaper</h4>
-            <ul className="space-y-2 list-disc list-inside">
-              <li>
-                <strong className="text-slate-200">Windows:</strong> Download the HTML pack and
-                import it into Lively Wallpaper.
-              </li>
-              <li>
-                <strong className="text-slate-200">Linux:</strong> Launch via layer-shell or embed
-                in an X11 window.
-              </li>
-              <li>
-                <strong className="text-slate-200">Browser:</strong> Extract the zip and open{' '}
-                <code className="text-cyan-400">index.html</code>.
-              </li>
-            </ul>
-            <div className="mt-4 pt-4 border-t border-white/5">
-              <Link href="/about" className="text-cyan-400 hover:text-cyan-300 font-medium">
-                Read full setup guide &rarr;
-              </Link>
-            </div>
-          </div>
+          <Card>
+            <CardHeader className="py-3">
+              <CardTitle className="text-xs text-slate-200 flex items-center gap-2">
+                <ShieldCheck className="w-3.5 h-3.5 text-terminal-green" />
+                DEPLOYMENT_INSTRUCTIONS
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="pt-2 text-xs text-terminal-dim space-y-3">
+              <div>
+                <strong className="text-slate-200">&gt;_ Linux Desktop:</strong>
+                <p className="text-[11px] mt-0.5">
+                  Launch the native Rust/Tauri desktop runner. Wallpapers render with click-through support on GNOME Wayland &amp; X11.
+                </p>
+              </div>
+              <div>
+                <strong className="text-slate-200">&gt;_ Windows 10/11:</strong>
+                <p className="text-[11px] mt-0.5">
+                  Download the Standalone HTML Pack and import the zip into Lively Wallpaper or Wallpaper Engine.
+                </p>
+              </div>
+              <div>
+                <strong className="text-slate-200">&gt;_ Web / Browser:</strong>
+                <p className="text-[11px] mt-0.5">
+                  Unzip the pack and open <code className="text-terminal-cyan">index.html</code> in any modern browser.
+                </p>
+              </div>
+              <div className="pt-2 border-t border-terminal-border/40">
+                <Link href="/about" className="text-terminal-cyan hover:underline text-[11px] inline-flex items-center gap-1">
+                  <span>&gt;_ View complete system installation guide &rarr;</span>
+                </Link>
+              </div>
+            </CardContent>
+          </Card>
         </div>
       </div>
     </div>

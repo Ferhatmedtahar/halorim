@@ -4216,8 +4216,8 @@ var OnClickSchema = z.object({
   background: z.array(ClickActionItemSchema).default([]).describe("Actions executed on clicking the background")
 }).describe("Click event bindings");
 var PerformanceSchema = z.object({
-  fpsCap: z.number().int().min(10).max(144).default(30).describe("Target frames per second cap"),
-  resolutionScale: z.number().min(0.25).max(1).default(0.5).describe("Rendering resolution scale relative to canvas physical size")
+  fpsCap: z.number().int().min(10).max(144).default(60).describe("Target frames per second cap"),
+  resolutionScale: z.number().min(0.25).max(1).default(1).describe("Rendering resolution scale relative to canvas physical size")
 }).describe("Rendering performance targets");
 var SceneSchemaV1 = z.object({
   schemaVersion: z.literal(CURRENT_SCHEMA_VERSION),
@@ -4409,7 +4409,7 @@ var ShapeRasterizationError = class _ShapeRasterizationError extends Error {
 // src/gl/context.ts
 function getWebGL2Context(canvas, attrs) {
   const gl = canvas.getContext("webgl2", {
-    alpha: false,
+    alpha: true,
     antialias: false,
     depth: false,
     stencil: false,
@@ -5148,6 +5148,7 @@ uniform vec2 u_resolution;        // Viewport width, height
 uniform vec2 u_shapePos;          // Shape center [0..1]
 uniform float u_shapeScale;       // Normalized shape scale
 uniform float u_shapeRotation;    // Radians
+uniform int u_shapeType;          // 0 = EDT texture, 1 = analytic triangle, 2 = analytic circle, 3 = analytic hexagon
 uniform float u_maxDistance;      // Normalized max distance factor
 uniform float u_edgeWidth;        // Rim core width
 uniform float u_edgeFalloff;      // Glow exponential falloff
@@ -5163,6 +5164,8 @@ uniform vec2 u_cursorPos;         // Normalized cursor position [0..1]
 uniform float u_cursorSharpness;  // Specular light focus
 uniform float u_hazeIntensity;    // Background haze intensity
 uniform float u_hasCursor;        // 1.0 if cursor active, 0.0 otherwise
+uniform float u_hoverTransition;  // Smooth hover weight [0..1]
+uniform float u_lightAngle;       // Perimeter light angle [radians]
 uniform float u_pulseFactor;      // Base mode: pulse multiplier (1.0 default)
 uniform float u_hueShift;         // Base mode: spectrum-cycle hue offset (0.0 default)
 uniform float u_flickerFactor;    // Base mode: neon flicker multiplier (1.0 default)
@@ -5184,6 +5187,37 @@ vec3 samplePalette(float t) {
   return mix(u_palette[i0].rgb, u_palette[i1].rgb, fracVal);
 }
 
+// Distance from point p to segment [a, b]
+float sdfSegment(vec2 p, vec2 a, vec2 b) {
+  vec2 pa = p - a;
+  vec2 ba = b - a;
+  float h = clamp(dot(pa, ba) / dot(ba, ba), 0.0, 1.0);
+  return length(pa - ba * h);
+}
+
+// Analytic signed distance to 2D triangle (Vercel geometry.wgsl / Inigo Quilez)
+float sdfTriangle(vec2 p, vec2 a, vec2 b, vec2 c) {
+  float d = min(min(sdfSegment(p, a, b), sdfSegment(p, b, c)), sdfSegment(p, c, a));
+  vec2 e0 = b - a;
+  vec2 e1 = c - b;
+  vec2 e2 = a - c;
+  float side0 = e0.x * (p.y - a.y) - e0.y * (p.x - a.x);
+  float side1 = e1.x * (p.y - b.y) - e1.y * (p.x - b.x);
+  float side2 = e2.x * (p.y - c.y) - e2.y * (p.x - c.x);
+  bool inside = (side0 <= 0.0 && side1 <= 0.0 && side2 <= 0.0) ||
+                (side0 >= 0.0 && side1 >= 0.0 && side2 >= 0.0);
+  return inside ? -d : d;
+}
+
+// Analytic regular hexagon
+float sdHexagon(vec2 p, float r) {
+  const vec3 k = vec3(-0.866025404, 0.5, 0.577350269);
+  p = abs(p);
+  p -= 2.0 * min(dot(k.xy, p), 0.0) * k.xy;
+  p -= vec2(clamp(p.x, -k.z * r, k.z * r), r);
+  return length(p) * sign(p.y);
+}
+
 void main() {
   float aspect = u_resolution.x / max(u_resolution.y, 1.0);
 
@@ -5199,36 +5233,65 @@ void main() {
     diff.x * sinR + diff.y * cosR
   );
 
-  // Map to [0..1] shape UV
   float safeScale = max(u_shapeScale, 0.001);
-  vec2 shapeUv = (rotated / safeScale) + vec2(0.5);
+  vec2 p = rotated / safeScale;
+  vec2 shapeUv = p + vec2(0.5);
 
-  // Clamp UV for SDF sampling
-  vec2 clampedUv = clamp(shapeUv, vec2(0.001), vec2(0.999));
-  float rawSdf = texture(u_sdf, clampedUv).r;
-  float distPixels = (rawSdf - 0.5) * 2.0 * u_maxDistance;
+  float d = 0.0;
+  vec2 shapeNormal = vec2(0.0, 1.0);
 
-  // Add Euclidean box distance if UV falls outside shape grid
-  vec2 boxDistVec = max(vec2(0.0), max(vec2(0.0) - shapeUv, shapeUv - vec2(1.0)));
-  float extraPixels = length(boxDistVec) * 1024.0;
-  float totalPixels = distPixels + extraPixels;
+  if (u_shapeType == 1) {
+    // Analytic equilateral triangle matching canonical preset geometry (size 0.7)
+    // h = 0.7 * sqrt(3)/2 = 0.60621778; topY = -2/3*h = -0.40414519; botY = 1/3*h = 0.20207259
+    const vec2 p0 = vec2(0.0, -0.40414518843);
+    const vec2 p1 = vec2(0.35, 0.20207259422);
+    const vec2 p2 = vec2(-0.35, 0.20207259422);
+    float localD = sdfTriangle(p, p0, p1, p2);
+    d = localD * safeScale;
 
-  // Normalized distance in world scale
-  float d = (totalPixels / 1024.0) * safeScale;
+    // True analytic normal via central differences
+    const float eps = 0.0005;
+    float ndx = sdfTriangle(p + vec2(eps, 0.0), p0, p1, p2) - sdfTriangle(p - vec2(eps, 0.0), p0, p1, p2);
+    float ndy = sdfTriangle(p + vec2(0.0, eps), p0, p1, p2) - sdfTriangle(p - vec2(0.0, eps), p0, p1, p2);
+    float nLen = length(vec2(ndx, ndy));
+    shapeNormal = nLen > 0.00001 ? vec2(ndx, ndy) / nLen : vec2(0.0, 1.0);
+  } else if (u_shapeType == 2) {
+    // Analytic circle
+    float localD = length(p) - 0.35;
+    d = localD * safeScale;
+    float pLen = length(p);
+    shapeNormal = pLen > 0.00001 ? p / pLen : vec2(0.0, 1.0);
+  } else if (u_shapeType == 3) {
+    // Analytic hexagon
+    float localD = sdHexagon(p, 0.35);
+    d = localD * safeScale;
+    const float eps = 0.0005;
+    float ndx = sdHexagon(p + vec2(eps, 0.0), 0.35) - sdHexagon(p - vec2(eps, 0.0), 0.35);
+    float ndy = sdHexagon(p + vec2(0.0, eps), 0.35) - sdHexagon(p - vec2(0.0, eps), 0.35);
+    float nLen = length(vec2(ndx, ndy));
+    shapeNormal = nLen > 0.00001 ? vec2(ndx, ndy) / nLen : vec2(0.0, 1.0);
+  } else {
+    // Fallback: EDT texture for arbitrary SVG paths or text
+    vec2 clampedUv = clamp(shapeUv, vec2(0.001), vec2(0.999));
+    float rawSdf = texture(u_sdf, clampedUv).r;
+    float distPixels = (rawSdf - 0.5) * 2.0 * u_maxDistance;
+    vec2 boxDistVec = max(vec2(0.0), max(vec2(0.0) - shapeUv, shapeUv - vec2(1.0)));
+    float extraPixels = length(boxDistVec) * 1024.0;
+    float totalPixels = distPixels + extraPixels;
+    d = (totalPixels / 1024.0) * safeScale;
 
-  // Compute SDF surface normal via central differences
-  float eps = 1.0 / 1024.0;
-  float dR = texture(u_sdf, clamp(shapeUv + vec2(eps, 0.0), 0.001, 0.999)).r;
-  float dL = texture(u_sdf, clamp(shapeUv - vec2(eps, 0.0), 0.001, 0.999)).r;
-  float dU = texture(u_sdf, clamp(shapeUv + vec2(0.0, eps), 0.001, 0.999)).r;
-  float dD = texture(u_sdf, clamp(shapeUv - vec2(0.0, eps), 0.001, 0.999)).r;
-  vec2 grad = vec2(dR - dL, dU - dD);
-  float gLen = length(grad);
-  vec2 shapeNormal = gLen > 0.00001 ? grad / gLen : vec2(0.0, 1.0);
+    float eps = 1.0 / 1024.0;
+    float dR = texture(u_sdf, clamp(shapeUv + vec2(eps, 0.0), 0.001, 0.999)).r;
+    float dL = texture(u_sdf, clamp(shapeUv - vec2(eps, 0.0), 0.001, 0.999)).r;
+    float dU = texture(u_sdf, clamp(shapeUv + vec2(0.0, eps), 0.001, 0.999)).r;
+    float dD = texture(u_sdf, clamp(shapeUv - vec2(0.0, eps), 0.001, 0.999)).r;
+    vec2 grad = vec2(dR - dL, dU - dD);
+    float gLen = length(grad);
+    shapeNormal = gLen > 0.00001 ? grad / gLen : vec2(0.0, 1.0);
+  }
 
-  // Edge prism color mapped via angle around shape center
-  vec2 centerDiff = shapeUv - vec2(0.5);
-  float angle = (length(centerDiff) > 0.00001) ? atan(centerDiff.y, centerDiff.x) : 0.0;
+  // Edge perimeter angle around shape center
+  float angle = (length(p) > 0.00001) ? atan(p.y, p.x) : 0.0;
   float normAngle = fract((angle / 6.28318530718) + 0.5 + u_time * u_rotationSpeed + u_hueShift);
 
   // Chromatic dispersion for prism effect
@@ -5238,51 +5301,94 @@ void main() {
   float bColor = samplePalette(normAngle + disp).b;
   vec3 edgeColor = vec3(rColor, gColor, bColor);
 
-  // Core line and exponential glow with pulse, flicker, and burst modulations
-  float safeFalloff = max(u_edgeFalloff, 0.001);
-  float modeIntensity = u_edgeIntensity * u_pulseFactor * u_flickerFactor + u_burstFactor;
-  float glow = exp(-max(d, 0.0) / safeFalloff) * modeIntensity;
-  float core = smoothstep(u_edgeWidth, 0.0, abs(d));
+  // --- Dynamic Multi-Band Perimeter Motion ---
+  float perimeterLight = 1.0;
+  if (u_rotationSpeed > 0.001) {
+    // 3 harmonic traveling wave bands inspired by Vercel LINE_VELOCITIES [-3.302, -2.355, -1.636]
+    float posAngle = fract((angle / 6.28318530718) + 0.5);
+    float s = u_rotationSpeed;
+    float t = u_time;
+
+    // Band centers traveling at non-commensurate harmonic ratios
+    float c0 = fract(t * s * 1.0);
+    float c1 = fract(t * s * 0.713 + 0.333);
+    float c2 = fract(t * s * 0.495 + 0.666);
+
+    // Dynamic breathing sizes
+    float w0 = 0.16 + 0.05 * sin(t * 0.41);
+    float w1 = 0.14 + 0.04 * sin(t * 0.31 + 2.1);
+    float w2 = 0.12 + 0.03 * sin(t * 0.23 + 4.2);
+
+    // Dynamic breathing intensities
+    float f0 = 0.5 + 0.5 * sin(t * 0.52 + 1.57);
+    float f1 = 0.5 + 0.5 * sin(t * 0.38 + 0.40);
+    float f2 = 0.5 + 0.5 * sin(t * 0.28 - 0.60);
+
+    float d0 = min(abs(posAngle - c0), 1.0 - abs(posAngle - c0));
+    float d1 = min(abs(posAngle - c1), 1.0 - abs(posAngle - c1));
+    float d2 = min(abs(posAngle - c2), 1.0 - abs(posAngle - c2));
+
+    float p0 = exp(-(d0 * d0) / max(2.0 * w0 * w0, 0.001)) * f0;
+    float p1 = exp(-(d1 * d1) / max(2.0 * w1 * w1, 0.001)) * f1;
+    float p2 = exp(-(d2 * d2) / max(2.0 * w2 * w2, 0.001)) * f2;
+
+    float multiBand = max(p0, max(p1, p2));
+    float idleLight = mix(0.10, 0.85, multiBand);
+
+    // Hover beam focusing toward cursor
+    float angleDiff = abs(angle - u_lightAngle);
+    if (angleDiff > 3.14159265) angleDiff = 6.2831853 - angleDiff;
+    float cursorBeam = pow(max(cos(angleDiff), 0.0), 3.0);
+    float activeCursorLight = mix(0.10, 0.90, cursorBeam);
+
+    perimeterLight = mix(idleLight, activeCursorLight, u_hoverTransition);
+  } else if (u_hoverTransition > 0.001) {
+    float angleDiff = abs(angle - u_lightAngle);
+    if (angleDiff > 3.14159265) angleDiff = 6.2831853 - angleDiff;
+    float cursorBeam = pow(max(cos(angleDiff), 0.0), 3.0);
+    perimeterLight = mix(0.12, 1.0, cursorBeam);
+  }
+
+  // Active edge illumination: purely on the shape perimeter (no cursor light blob)
+  float edgeLight = perimeterLight;
+
+  // Mode modulations
+  edgeLight = edgeLight * u_pulseFactor * u_flickerFactor + u_burstFactor;
 
   // Sweep highlight beam
-  float sweepBeam = 0.0;
   if (u_sweep.w > 0.5) {
     float dAngle = abs(normAngle - u_sweep.x);
     dAngle = min(dAngle, 1.0 - dAngle);
-    sweepBeam = exp(-(dAngle * dAngle) / max(u_sweep.y * u_sweep.y, 0.0001)) * u_sweep.z;
+    float sweepBeam = exp(-(dAngle * dAngle) / max(u_sweep.y * u_sweep.y, 0.0001)) * u_sweep.z;
+    edgeLight += sweepBeam;
   }
 
   // Transient ripple wave
-  float rippleWave = 0.0;
   if (u_ripple.w > 0.001) {
     float clickDist = length(shapeUv - u_ripple.xy);
     float waveDist = abs(clickDist - u_ripple.z);
-    rippleWave = exp(-(waveDist * waveDist) / 0.0015) * u_ripple.w;
+    edgeLight += exp(-(waveDist * waveDist) / 0.0015) * u_ripple.w;
   }
 
-  // Cursor directional illumination
-  vec2 cursorDiff = v_uv - u_cursorPos;
-  cursorDiff.x *= aspect;
-  float cursorDist = length(cursorDiff);
-  vec2 dirToCursor = cursorDist > 0.0001 ? -cursorDiff / cursorDist : vec2(0.0, 1.0);
+  // --- Pure Vercel Edge Falloff & Space Expansion ---
+  // 1. Razor-sharp core line
+  float core = smoothstep(u_edgeWidth, 0.0, abs(d));
+  // 2. Near-band falloff
+  float nearOuter = max(u_edgeFalloff, 0.018);
+  float nearFade = clamp(1.0 - max(d, 0.0) / nearOuter, 0.0, 1.0);
+  float nearBand = pow(nearFade, 2.8);
+  // 3. Two-stage exponential far radiance expanding naturally into the black void
+  float farStage1 = exp(-max(d, 0.0) * 13.0) * 0.35;
+  float farStage2 = exp(-max(d, 0.0) * 3.8) * 0.14;
+  float farGlow = farStage1 + farStage2;
 
-  // Transform cursor direction into shape coordinate space
-  vec2 shapeCursorDir = vec2(
-    dirToCursor.x * cosR + dirToCursor.y * sinR,
-    -dirToCursor.x * sinR + dirToCursor.y * cosR
-  );
-
-  float alignment = pow(max(dot(shapeNormal, shapeCursorDir), 0.0), max(u_cursorSharpness, 0.1));
-  float attenuation = 1.0 / (1.0 + cursorDist * 3.5);
-  float cursorLight = u_hasCursor * alignment * attenuation * 2.0;
-
-  // Volumetric cursor haze
-  float haze = u_hasCursor * exp(-cursorDist / 0.35) * u_hazeIntensity * 0.2;
+  // Calibrated rim profile: never clips/blows out into washed-out white
+  float rimProfile = (nearBand * 0.45 + core * 0.55 + farGlow) * u_edgeIntensity * edgeLight;
 
   // Inside vs outside composition
   vec3 linearColor;
+  float outAlpha = 1.0;
   if (d < 0.0) {
-    // Interior is solid fill (default pure black) blended with optional center content
     vec3 col = u_fillColor;
     if (u_hasContent > 0.5) {
       vec2 contentUv = (shapeUv - vec2(0.5)) / max(u_contentScale, 0.001) + vec2(0.5);
@@ -5293,12 +5399,22 @@ void main() {
         col = mix(col, contentRgb, alpha);
       }
     }
-    linearColor = col;
+    // Subpixel occluder edge derivative for crisp anti-aliased silhouette
+    float occluderEdge = max(length(vec2(dFdx(d), dFdy(d))), 0.001);
+    float occluder = clamp(0.5 - d / occluderEdge, 0.0, 1.0);
+    linearColor = mix(edgeColor * rimProfile, col, occluder);
+    outAlpha = 1.0;
   } else {
-    // Outside: edge prism glow modulated by cursor light, sweep, ripple, and ambient haze
-    float rimFactor = glow + core * 1.5 + (cursorLight * glow) + (sweepBeam * glow) + rippleWave;
-    linearColor = u_bgColor + (edgeColor * rimFactor) + vec3(haze);
+    linearColor = u_bgColor + (edgeColor * rimProfile);
+    float glowBrightness = max(linearColor.r, max(linearColor.g, linearColor.b));
+    outAlpha = clamp(glowBrightness * 3.0, 0.0, 1.0);
   }
+
+  // Screen-edge vertical fade
+  float vertDist = min(v_uv.y, 1.0 - v_uv.y);
+  float screenEdgeFade = sqrt(clamp(vertDist / 0.15, 0.0, 1.0));
+  linearColor *= screenEdgeFade;
+  outAlpha *= screenEdgeFade;
 
   linearColor = clamp(linearColor, 0.0, 1.0);
 
@@ -5306,12 +5422,12 @@ void main() {
   vec3 srgb = pow(linearColor, vec3(1.0 / 2.2));
 
   // Dither in sRGB space on outside rim/background to eliminate banding without lifting true black
-  if (d >= 0.0) {
+  if (d >= 0.0 && dot(srgb, vec3(1.0)) > 0.001) {
     float dither = (fract(sin(dot(gl_FragCoord.xy, vec2(12.9898, 78.233))) * 43758.5453) - 0.5) / 255.0;
     srgb = clamp(srgb + vec3(dither), 0.0, 1.0);
   }
 
-  fragColor = vec4(srgb, 1.0);
+  fragColor = vec4(srgb, outAlpha);
 }
 `;
 
@@ -5899,6 +6015,14 @@ var ALL_CLICK_ACTION_IDS = [
 ];
 
 // src/renderer.ts
+function getShapeType(shape) {
+  if (shape.type === "preset") {
+    if (shape.preset === "triangle") return 1;
+    if (shape.preset === "circle") return 2;
+    if (shape.preset === "hexagon") return 3;
+  }
+  return 0;
+}
 function createRenderer(options) {
   const { canvas } = options;
   let currentScene = parseScene(options.scene);
@@ -5923,6 +6047,7 @@ function createRenderer(options) {
   let lastPointerTime = clock.now();
   let lastAnimTime = clock.now();
   let isOrbiting = false;
+  let hoverTransition = 0;
   let currentPaletteIndex = 0;
   let activeModeId = currentScene.mode.id;
   let activeModeParams = currentScene.mode.params || {};
@@ -5958,6 +6083,9 @@ function createRenderer(options) {
     u_hasCursor: 0,
     u_cursorSharpness: 3,
     u_hazeIntensity: 0.6,
+    u_hoverTransition: 0,
+    u_lightAngle: 0,
+    u_shapeType: getShapeType(currentScene.shape),
     u_shapePos: [0.5, 0.52],
     u_shapeScale: 0.28,
     u_shapeRotation: 0,
@@ -6035,10 +6163,38 @@ function createRenderer(options) {
     const shapeV = rotY / safeScale + 0.5;
     return [shapeU, shapeV];
   }
-  function hitTestScreen(x, y) {
+  function isPointerInsideShape(x, y) {
+    const aspect = canvas.width / Math.max(canvas.height, 1);
+    const diffX = (x - currentScene.shape.position[0]) * aspect;
+    const diffY = y - currentScene.shape.position[1];
+    const rotRad = currentScene.shape.rotation * Math.PI / 180;
+    const cosR = Math.cos(-rotRad);
+    const sinR = Math.sin(-rotRad);
+    const rotX = diffX * cosR - diffY * sinR;
+    const rotY = diffX * sinR + diffY * cosR;
+    const safeScale = Math.max(currentScene.shape.scale, 1e-3);
+    const localX = rotX / safeScale;
+    const localY = rotY / safeScale;
+    if (currentScene.shape.type === "preset" && currentScene.shape.preset === "triangle") {
+      const e0X = 0.35;
+      const e0Y = 0.60621778265;
+      const e1X = -0.7;
+      const e1Y = 0;
+      const e2X = 0.35;
+      const e2Y = -0.60621778265;
+      const side0 = e0X * (localY - -0.40414518843) - e0Y * (localX - 0);
+      const side1 = e1X * (localY - 0.20207259422) - e1Y * (localX - 0.35);
+      const side2 = e2X * (localY - 0.20207259422) - e2Y * (localX - -0.35);
+      return side0 <= 0 && side1 <= 0 && side2 <= 0 || side0 >= 0 && side1 >= 0 && side2 >= 0;
+    }
+    if (currentScene.shape.type === "preset" && currentScene.shape.preset === "circle") {
+      return localX * localX + localY * localY <= 0.35 * 0.35;
+    }
     const [shapeU, shapeV] = screenToShapeUv(x, y);
-    const distance = shapePipeline.hitTest(shapeU, shapeV);
-    return distance < 0 ? "object" : "background";
+    return shapePipeline.hitTest(shapeU, shapeV) < 0;
+  }
+  function hitTestScreen(x, y) {
+    return isPointerInsideShape(x, y) ? "object" : "background";
   }
   function executeAction(item, _screenPos, shapePos) {
     const action = item.action;
@@ -6236,10 +6392,30 @@ function createRenderer(options) {
       targetPointerX = shapeCenter[0] + Math.cos(orbitAngle) * orbitRadius;
       targetPointerY = shapeCenter[1] + Math.sin(orbitAngle) * orbitRadius;
     }
+    const isInside = pointerActive && isPointerInsideShape(targetPointerX, targetPointerY);
     const smoothing = currentScene.interaction.smoothing;
     currentPointerX += (targetPointerX - currentPointerX) * smoothing;
     currentPointerY += (targetPointerY - currentPointerY) * smoothing;
-    const hasCursor = isExplicitOrbitMode || currentScene.interaction.followCursor && (pointerActive || shouldIdleOrbit) ? 1 : 0;
+    const hasCursor = isExplicitOrbitMode || currentScene.interaction.followCursor && (pointerActive && !isInside || shouldIdleOrbit) ? 1 : 0;
+    const aspect = canvas.width / Math.max(canvas.height, 1);
+    const shapeX = currentScene.shape.position[0];
+    const shapeY = currentScene.shape.position[1];
+    const dx = (currentPointerX - shapeX) * aspect;
+    const dy = currentPointerY - shapeY;
+    const hoverTarget = pointerActive && !isInside ? 1 : 0;
+    const hoverAlpha = dt > 0 ? 1 - Math.exp(-dt / 0.25) : 1;
+    hoverTransition += (hoverTarget - hoverTransition) * hoverAlpha;
+    hoverTransition = Math.max(0, Math.min(1, hoverTransition));
+    const rotSpeed = modeUniforms.rotationSpeed;
+    const autoAngle = rotSpeed !== 0 ? timeSec * rotSpeed * Math.PI * 2 % (Math.PI * 2) : 0;
+    let activeLightAngle = autoAngle;
+    if (hoverTransition > 1e-3) {
+      const cursorAngle = Math.atan2(dy, dx);
+      let angleDiff = (cursorAngle - autoAngle) % (Math.PI * 2);
+      if (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
+      if (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
+      activeLightAngle = autoAngle + angleDiff * hoverTransition;
+    }
     sweepBuffer[0] = modeUniforms.sweep[0];
     sweepBuffer[1] = modeUniforms.sweep[1];
     sweepBuffer[2] = modeUniforms.sweep[2];
@@ -6247,6 +6423,9 @@ function createRenderer(options) {
     currentUniforms.u_cursorPos[0] = currentPointerX;
     currentUniforms.u_cursorPos[1] = currentPointerY;
     currentUniforms.u_hasCursor = hasCursor;
+    currentUniforms.u_hoverTransition = hoverTransition;
+    currentUniforms.u_lightAngle = activeLightAngle;
+    currentUniforms.u_shapeType = getShapeType(currentScene.shape);
     currentUniforms.u_cursorSharpness = currentScene.interaction.sharpness;
     currentUniforms.u_hazeIntensity = currentScene.background.haze.intensity;
     currentUniforms.u_shapePos[0] = currentScene.shape.position[0];
@@ -6295,6 +6474,8 @@ function createRenderer(options) {
     if (uShapeScaleLoc) gl.uniform1f(uShapeScaleLoc, currentScene.shape.scale);
     const uShapeRotLoc = program.getUniformLocation("u_shapeRotation");
     if (uShapeRotLoc) gl.uniform1f(uShapeRotLoc, currentScene.shape.rotation * Math.PI / 180);
+    const uShapeTypeLoc = program.getUniformLocation("u_shapeType");
+    if (uShapeTypeLoc) gl.uniform1i(uShapeTypeLoc, currentUniforms.u_shapeType);
     const uMaxDistLoc = program.getUniformLocation("u_maxDistance");
     if (uMaxDistLoc) gl.uniform1f(uMaxDistLoc, shapePipeline.sdf.maxDistance);
     const uEdgeWidthLoc = program.getUniformLocation("u_edgeWidth");
@@ -6331,6 +6512,10 @@ function createRenderer(options) {
     if (uBurstLoc) gl.uniform1f(uBurstLoc, burstFactor);
     const uCursorPosLoc = program.getUniformLocation("u_cursorPos");
     if (uCursorPosLoc) gl.uniform2f(uCursorPosLoc, currentPointerX, currentPointerY);
+    const uHoverLoc = program.getUniformLocation("u_hoverTransition");
+    if (uHoverLoc) gl.uniform1f(uHoverLoc, hoverTransition);
+    const uLightAngleLoc = program.getUniformLocation("u_lightAngle");
+    if (uLightAngleLoc) gl.uniform1f(uLightAngleLoc, activeLightAngle);
     const uCursorSharpLoc = program.getUniformLocation("u_cursorSharpness");
     if (uCursorSharpLoc) gl.uniform1f(uCursorSharpLoc, currentScene.interaction.sharpness);
     const uHazeLoc = program.getUniformLocation("u_hazeIntensity");

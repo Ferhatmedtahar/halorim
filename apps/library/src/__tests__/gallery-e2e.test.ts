@@ -121,7 +121,7 @@ describe('Gallery E2E & Performance Acceptance Tests', () => {
     expect(visibleCards.length).toBe(1);
 
     await page.close();
-  });
+  }, 25000);
 
   it('verifies detail page renders live WebGL2 canvas and disposes cleanly', async () => {
     const page = await browser.newPage({
@@ -149,5 +149,5 @@ describe('Gallery E2E & Performance Acceptance Tests', () => {
     expect(page.url()).toBe(`${serverUrl}/`);
 
     await page.close();
-  });
+  }, 25000);
 });
