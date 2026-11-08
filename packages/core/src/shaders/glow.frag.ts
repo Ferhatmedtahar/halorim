@@ -248,6 +248,7 @@ void main() {
 
   // Inside vs outside composition
   vec3 linearColor;
+  float outAlpha = 1.0;
   if (d < 0.0) {
     vec3 col = u_fillColor;
     if (u_hasContent > 0.5) {
@@ -263,14 +264,18 @@ void main() {
     float occluderEdge = max(length(vec2(dFdx(d), dFdy(d))), 0.001);
     float occluder = clamp(0.5 - d / occluderEdge, 0.0, 1.0);
     linearColor = mix(edgeColor * rimProfile, col, occluder);
+    outAlpha = 1.0;
   } else {
     linearColor = u_bgColor + (edgeColor * rimProfile);
+    float glowBrightness = max(linearColor.r, max(linearColor.g, linearColor.b));
+    outAlpha = clamp(glowBrightness * 2.5, 0.0, 1.0);
   }
 
   // Screen-edge vertical fade
   float vertDist = min(v_uv.y, 1.0 - v_uv.y);
   float screenEdgeFade = sqrt(clamp(vertDist / 0.15, 0.0, 1.0));
   linearColor *= screenEdgeFade;
+  outAlpha *= screenEdgeFade;
 
   linearColor = clamp(linearColor, 0.0, 1.0);
 
@@ -283,6 +288,6 @@ void main() {
     srgb = clamp(srgb + vec3(dither), 0.0, 1.0);
   }
 
-  fragColor = vec4(srgb, 1.0);
+  fragColor = vec4(srgb, outAlpha);
 }
 `;

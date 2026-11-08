@@ -5,7 +5,7 @@ export function getWebGL2Context(
   attrs?: WebGLContextAttributes,
 ): WebGL2RenderingContext {
   const gl = canvas.getContext('webgl2', {
-    alpha: false,
+    alpha: true,
     antialias: false,
     depth: false,
     stencil: false,

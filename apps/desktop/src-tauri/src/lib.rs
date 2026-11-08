@@ -14,6 +14,11 @@ pub fn run() {
             let handle = app.handle();
             let _ = tray::create_tray(handle);
 
+            #[cfg(target_os = "linux")]
+            {
+                linux_host::sync_gnome_background();
+            }
+
             let available_monitors = app.available_monitors().unwrap_or_default();
             let monitor_geometries: Vec<(i32, i32, u32, u32)> = if available_monitors.is_empty() {
                 vec![(0, 0, 1920, 1080)]
