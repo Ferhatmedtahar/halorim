@@ -59,7 +59,7 @@ export const fourPaneScene: Scene = parseScene({
     background: [{ action: 'none' }],
   },
   performance: {
-    fpsCap: 30,
-    resolutionScale: 0.5,
+    fpsCap: 60,
+    resolutionScale: 1.0,
   },
 });

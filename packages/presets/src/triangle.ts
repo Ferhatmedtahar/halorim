@@ -28,7 +28,7 @@ export const triangleScene: Scene = parseScene({
   edge: {
     width: 0.003,
     falloff: 0.025,
-    intensity: 1.0,
+    intensity: 0.9,
     dispersion: 0.35,
   },
   palettes: [
@@ -41,7 +41,7 @@ export const triangleScene: Scene = parseScene({
   mode: {
     id: 'rotate',
     params: {
-      speed: 0.25,
+      speed: 0.05,
     },
   },
   modifiers: [],
@@ -65,7 +65,7 @@ export const triangleScene: Scene = parseScene({
     ],
   },
   performance: {
-    fpsCap: 30,
-    resolutionScale: 0.5,
+    fpsCap: 60,
+    resolutionScale: 1.0,
   },
 });

@@ -1,4 +1,4 @@
-import { Scene, parseScene, type ClickActionItem } from '@glowframe/schema';
+import { Scene, parseScene, type ClickActionItem, type Shape } from '@glowframe/schema';
 import type { Renderer, RendererOptions, InputSource, Clock, UniformState } from './types.js';
 import { SystemClock } from './clock.js';
 import { NoopInput } from './input/noop.js';
@@ -33,6 +33,15 @@ import {
   type ActiveRipple,
   type ActiveBurst,
 } from './effects/index.js';
+
+function getShapeType(shape: Shape): number {
+  if (shape.type === 'preset') {
+    if (shape.preset === 'triangle') return 1;
+    if (shape.preset === 'circle') return 2;
+    if (shape.preset === 'hexagon') return 3;
+  }
+  return 0;
+}
 
 export function createRenderer(options: RendererOptions): Renderer {
   const { canvas } = options;
@@ -112,6 +121,7 @@ export function createRenderer(options: RendererOptions): Renderer {
     u_hazeIntensity: 0.6,
     u_hoverTransition: 0.0,
     u_lightAngle: 0.0,
+    u_shapeType: getShapeType(currentScene.shape),
     u_shapePos: [0.5, 0.52],
     u_shapeScale: 0.28,
     u_shapeRotation: 0,
@@ -476,6 +486,7 @@ export function createRenderer(options: RendererOptions): Renderer {
     currentUniforms.u_hasCursor = hasCursor;
     currentUniforms.u_hoverTransition = hoverTransition;
     currentUniforms.u_lightAngle = activeLightAngle;
+    currentUniforms.u_shapeType = getShapeType(currentScene.shape);
     currentUniforms.u_cursorSharpness = currentScene.interaction.sharpness;
     currentUniforms.u_hazeIntensity = currentScene.background.haze.intensity;
     currentUniforms.u_shapePos[0] = currentScene.shape.position[0];
@@ -533,6 +544,9 @@ export function createRenderer(options: RendererOptions): Renderer {
 
     const uShapeRotLoc = program.getUniformLocation('u_shapeRotation');
     if (uShapeRotLoc) gl.uniform1f(uShapeRotLoc, (currentScene.shape.rotation * Math.PI) / 180);
+
+    const uShapeTypeLoc = program.getUniformLocation('u_shapeType');
+    if (uShapeTypeLoc) gl.uniform1i(uShapeTypeLoc, currentUniforms.u_shapeType);
 
     const uMaxDistLoc = program.getUniformLocation('u_maxDistance');
     if (uMaxDistLoc) gl.uniform1f(uMaxDistLoc, shapePipeline.sdf.maxDistance);

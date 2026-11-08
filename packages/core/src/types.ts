@@ -29,6 +29,7 @@ export interface UniformState {
   u_hazeIntensity: number;
   u_hoverTransition: number;
   u_lightAngle: number;
+  u_shapeType: number;
   u_shapePos: [number, number];
   u_shapeScale: number;
   u_shapeRotation: number;

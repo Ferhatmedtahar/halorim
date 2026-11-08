@@ -298,12 +298,12 @@ export const OnClickSchema = z
 
 export const PerformanceSchema = z
   .object({
-    fpsCap: z.number().int().min(10).max(144).default(30).describe('Target frames per second cap'),
+    fpsCap: z.number().int().min(10).max(144).default(60).describe('Target frames per second cap'),
     resolutionScale: z
       .number()
       .min(0.25)
       .max(1.0)
-      .default(0.5)
+      .default(1.0)
       .describe('Rendering resolution scale relative to canvas physical size'),
   })
   .describe('Rendering performance targets');
