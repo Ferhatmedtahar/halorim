@@ -76,23 +76,73 @@ canvas.addEventListener('pointerleave', () => {
   hostInput.emitPointerLeave();
 });
 
+interface CursorEventPayload {
+  monitor?: number;
+  x: number;
+  y: number;
+}
+
+interface LeaveEventPayload {
+  monitor?: number;
+}
+
 // Setup Tauri IPC event listeners if running inside Tauri webview
 async function setupTauriEvents() {
   try {
     const { listen } = await import('@tauri-apps/api/event');
 
-    await listen<{ x: number; y: number }>('glowframe://cursor-move', (event) => {
-      hostInput.emitPointerMove(event.payload.x, event.payload.y);
+    const handlePointerMove = (x: number, y: number, monitor?: number) => {
+      if (monitor === undefined || monitor === monitorIndex) {
+        hostInput.emitPointerMove(x, y);
+      }
+    };
+
+    let lastDownTime = 0;
+    const handlePointerDown = (x: number, y: number, monitor?: number) => {
+      const now = performance.now();
+      if (now - lastDownTime < 120) return;
+      if (monitor === undefined || monitor === monitorIndex) {
+        lastDownTime = now;
+        hostInput.emitPointerDown(x, y);
+        persistActivePalette();
+      }
+    };
+
+    const handlePointerLeave = (monitor?: number) => {
+      if (monitor === undefined || monitor === monitorIndex) {
+        hostInput.emitPointerLeave();
+      }
+    };
+
+    // Listen on global event channel
+    await listen<CursorEventPayload>('glowframe://cursor-move', (event) => {
+      handlePointerMove(event.payload.x, event.payload.y, event.payload.monitor);
     });
 
-    await listen<{ x: number; y: number }>('glowframe://cursor-down', (event) => {
-      hostInput.emitPointerDown(event.payload.x, event.payload.y);
-      persistActivePalette();
+    await listen<CursorEventPayload>('glowframe://cursor-down', (event) => {
+      handlePointerDown(event.payload.x, event.payload.y, event.payload.monitor);
     });
 
-    await listen('glowframe://cursor-leave', () => {
-      hostInput.emitPointerLeave();
+    await listen<LeaveEventPayload>('glowframe://cursor-leave', (event) => {
+      handlePointerLeave(event.payload.monitor);
     });
+
+    // Also register on current webview window channel if available
+    try {
+      const { getCurrentWebviewWindow } = await import('@tauri-apps/api/webviewWindow');
+      const win = getCurrentWebviewWindow();
+      await win.listen<CursorEventPayload>('glowframe://cursor-move', (event) => {
+        handlePointerMove(event.payload.x, event.payload.y, event.payload.monitor);
+      });
+      await win.listen<CursorEventPayload>('glowframe://cursor-down', (event) => {
+        handlePointerDown(event.payload.x, event.payload.y, event.payload.monitor);
+      });
+      await win.listen<LeaveEventPayload>('glowframe://cursor-leave', (event) => {
+        handlePointerLeave(event.payload.monitor);
+      });
+    } catch {
+      // not in a tauri window context
+    }
 
     await listen<{ paused: boolean }>('glowframe://set-paused', (event) => {
       renderer.setPaused(event.payload.paused);

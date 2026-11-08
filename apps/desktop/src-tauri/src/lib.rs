@@ -6,6 +6,13 @@ use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 
 pub fn run() {
+    #[cfg(target_os = "linux")]
+    {
+        if std::env::var("GDK_BACKEND").is_err() {
+            std::env::set_var("GDK_BACKEND", "x11");
+        }
+    }
+
     let stop_signal = Arc::new(AtomicBool::new(false));
     let stop_signal_clone = stop_signal.clone();
 

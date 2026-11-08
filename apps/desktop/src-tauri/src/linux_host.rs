@@ -14,6 +14,7 @@ use tauri::Emitter;
 
 #[derive(Clone, Serialize)]
 pub struct CursorPayload {
+    pub monitor: usize,
     pub x: f64,
     pub y: f64,
 }
@@ -121,6 +122,14 @@ pub fn map_pointer_to_monitor(
 
     for m in monitors {
         if x >= m.x && x < m.x + m.width && y >= m.y && y < m.y + m.height {
+            let (nx, ny) = normalize_coordinates(x - m.x, y - m.y, m.width, m.height);
+            return Some((m.index, nx, ny));
+        }
+    }
+
+    // Boundary check for inclusive screen edges
+    for m in monitors {
+        if x >= m.x && x <= m.x + m.width && y >= m.y && y <= m.y + m.height {
             let (nx, ny) = normalize_coordinates(x - m.x, y - m.y, m.width, m.height);
             return Some((m.index, nx, ny));
         }
@@ -381,9 +390,17 @@ pub fn start_desktop_monitor(
                                 // Did we cross into a different monitor?
                                 if let Some(prev_idx) = active_monitor_idx {
                                     if prev_idx != m_idx {
+                                        last_x = -1.0;
+                                        last_y = -1.0;
                                         let prev_label = format!("wallpaper-{}", prev_idx);
+                                        let leave_payload = CursorPayload {
+                                            monitor: prev_idx,
+                                            x: 0.0,
+                                            y: 0.0,
+                                        };
+                                        let _ = app_handle.emit("glowframe://cursor-leave", leave_payload.clone());
                                         if let Some(prev_win) = app_handle.get_webview_window(&prev_label) {
-                                            let _ = prev_win.emit("glowframe://cursor-leave", ());
+                                            let _ = prev_win.emit("glowframe://cursor-leave", leave_payload);
                                         }
                                     }
                                 }
@@ -394,14 +411,14 @@ pub fn start_desktop_monitor(
                                 if (norm_x - last_x).abs() > 0.0005
                                     || (norm_y - last_y).abs() > 0.0005
                                 {
+                                    let payload = CursorPayload {
+                                        monitor: m_idx,
+                                        x: norm_x,
+                                        y: norm_y,
+                                    };
+                                    let _ = app_handle.emit("glowframe://cursor-move", payload.clone());
                                     if let Some(win) = app_handle.get_webview_window(&target_label) {
-                                        let _ = win.emit(
-                                            "glowframe://cursor-move",
-                                            CursorPayload {
-                                                x: norm_x,
-                                                y: norm_y,
-                                            },
-                                        );
+                                        let _ = win.emit("glowframe://cursor-move", payload);
                                     }
                                     last_x = norm_x;
                                     last_y = norm_y;
@@ -409,21 +426,27 @@ pub fn start_desktop_monitor(
 
                                 let is_down = mask.contains(gdk::ModifierType::BUTTON1_MASK);
                                 if is_down && !was_down {
+                                    let payload = CursorPayload {
+                                        monitor: m_idx,
+                                        x: norm_x,
+                                        y: norm_y,
+                                    };
+                                    let _ = app_handle.emit("glowframe://cursor-down", payload.clone());
                                     if let Some(win) = app_handle.get_webview_window(&target_label) {
-                                        let _ = win.emit(
-                                            "glowframe://cursor-down",
-                                            CursorPayload {
-                                                x: norm_x,
-                                                y: norm_y,
-                                            },
-                                        );
+                                        let _ = win.emit("glowframe://cursor-down", payload);
                                     }
                                 }
                                 was_down = is_down;
                             } else if let Some(prev_idx) = active_monitor_idx.take() {
                                 let prev_label = format!("wallpaper-{}", prev_idx);
+                                let leave_payload = CursorPayload {
+                                    monitor: prev_idx,
+                                    x: 0.0,
+                                    y: 0.0,
+                                };
+                                let _ = app_handle.emit("glowframe://cursor-leave", leave_payload.clone());
                                 if let Some(prev_win) = app_handle.get_webview_window(&prev_label) {
-                                    let _ = prev_win.emit("glowframe://cursor-leave", ());
+                                    let _ = prev_win.emit("glowframe://cursor-leave", leave_payload);
                                 }
                             }
                         }
@@ -514,9 +537,9 @@ mod tests {
 
     #[test]
     fn test_cursor_payload_serialization() {
-        let payload = CursorPayload { x: 0.42, y: 0.88 };
+        let payload = CursorPayload { monitor: 0, x: 0.42, y: 0.88 };
         let json = serde_json::to_string(&payload).unwrap();
-        assert_eq!(json, "{\"x\":0.42,\"y\":0.88}");
+        assert_eq!(json, "{\"monitor\":0,\"x\":0.42,\"y\":0.88}");
     }
 
     #[test]
