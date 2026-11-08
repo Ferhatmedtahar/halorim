@@ -132,23 +132,31 @@ void main() {
     float nLen = length(vec2(ndx, ndy));
     shapeNormal = nLen > 0.00001 ? vec2(ndx, ndy) / nLen : vec2(0.0, 1.0);
   } else {
-    // Fallback: EDT texture for arbitrary SVG paths or text
-    vec2 clampedUv = clamp(shapeUv, vec2(0.001), vec2(0.999));
-    float rawSdf = texture(u_sdf, clampedUv).r;
+    // High-fidelity EDT distance field for arbitrary SVG paths or text.
+    // Radial boundary projection eliminates square/rectangular texture-box artifacts completely!
+    float r = length(p);
+    const float rMax = 0.44;
+    vec2 pSample = (r > rMax && r > 0.00001) ? (p / r) * rMax : p;
+    vec2 sampleUv = pSample + vec2(0.5);
+
+    float rawSdf = texture(u_sdf, sampleUv).r;
     float distPixels = (rawSdf - 0.5) * 2.0 * u_maxDistance;
-    vec2 boxDistVec = max(vec2(0.0), max(vec2(0.0) - shapeUv, shapeUv - vec2(1.0)));
-    float extraPixels = length(boxDistVec) * 1024.0;
+    float extraPixels = max(r - rMax, 0.0) * 1024.0;
     float totalPixels = distPixels + extraPixels;
     d = (totalPixels / 1024.0) * safeScale;
 
+    // Normal calculation via EDT central differences
     float eps = 1.0 / 1024.0;
-    float dR = texture(u_sdf, clamp(shapeUv + vec2(eps, 0.0), 0.001, 0.999)).r;
-    float dL = texture(u_sdf, clamp(shapeUv - vec2(eps, 0.0), 0.001, 0.999)).r;
-    float dU = texture(u_sdf, clamp(shapeUv + vec2(0.0, eps), 0.001, 0.999)).r;
-    float dD = texture(u_sdf, clamp(shapeUv - vec2(0.0, eps), 0.001, 0.999)).r;
+    float dR = texture(u_sdf, sampleUv + vec2(eps, 0.0)).r;
+    float dL = texture(u_sdf, sampleUv - vec2(eps, 0.0)).r;
+    float dU = texture(u_sdf, sampleUv + vec2(0.0, eps)).r;
+    float dD = texture(u_sdf, sampleUv - vec2(0.0, eps)).r;
     vec2 grad = vec2(dR - dL, dU - dD);
     float gLen = length(grad);
-    shapeNormal = gLen > 0.00001 ? grad / gLen : vec2(0.0, 1.0);
+    vec2 edtNormal = gLen > 0.00001 ? grad / gLen : (r > 0.00001 ? p / r : vec2(0.0, 1.0));
+    vec2 radialNormal = r > 0.00001 ? p / r : vec2(0.0, 1.0);
+    float radialBlend = smoothstep(rMax * 0.75, rMax, r);
+    shapeNormal = normalize(mix(edtNormal, radialNormal, radialBlend));
   }
 
   // Edge perimeter angle around shape center

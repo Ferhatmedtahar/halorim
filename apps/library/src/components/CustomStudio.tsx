@@ -137,7 +137,13 @@ export default function CustomStudio({ initialScene }: CustomStudioProps) {
   const [falloff, setFalloff] = useState(initialScene?.edge.falloff ?? 0.04);
   const [intensity, setIntensity] = useState(initialScene?.edge.intensity ?? 1.15);
   const [dispersion, setDispersion] = useState(initialScene?.edge.dispersion ?? 0.38);
+  const [rotationSpeed, setRotationSpeed] = useState(
+    typeof initialScene?.mode.params.speed === 'number' ? initialScene.mode.params.speed : 0.05
+  );
   const [selectedPaletteIdx, setSelectedPaletteIdx] = useState(0);
+  const [customColor1, setCustomColor1] = useState('#00dfd8');
+  const [customColor2, setCustomColor2] = useState('#ff0080');
+  const [useCustomColors, setUseCustomColors] = useState(false);
 
   // Status & UI State
   const [copied, setCopied] = useState(false);
@@ -155,7 +161,9 @@ export default function CustomStudio({ initialScene }: CustomStudioProps) {
   // Construct Scene Object
   const currentScene: Scene = useMemo(() => {
     try {
-      const activeColors = PALETTE_PRESETS[selectedPaletteIdx]?.colors ?? ['#00dfd8', '#ffffff'];
+      const activeColors = useCustomColors
+        ? [customColor1, customColor2, '#ffffff']
+        : (PALETTE_PRESETS[selectedPaletteIdx]?.colors ?? ['#00dfd8', '#ffffff']);
       return parseScene({
         schemaVersion: 1,
         meta: {
@@ -194,7 +202,7 @@ export default function CustomStudio({ initialScene }: CustomStudioProps) {
         ],
         mode: {
           id: 'rotate',
-          params: { speed: 0.05 },
+          params: { speed: rotationSpeed },
         },
         modifiers: [],
         interaction: {
@@ -230,7 +238,7 @@ export default function CustomStudio({ initialScene }: CustomStudioProps) {
         performance: { fpsCap: 60, resolutionScale: 1 },
       });
     }
-  }, [shapeName, svgPath, viewBoxW, viewBoxH, scale, rotationDeg, posX, posY, edgeWidth, falloff, intensity, dispersion, selectedPaletteIdx]);
+  }, [shapeName, svgPath, viewBoxW, viewBoxH, scale, rotationDeg, posX, posY, edgeWidth, falloff, intensity, dispersion, selectedPaletteIdx, rotationSpeed, customColor1, customColor2, useCustomColors]);
 
   // Mount & Update WebGL2 Renderer
   useEffect(() => {
@@ -765,33 +773,128 @@ export default function CustomStudio({ initialScene }: CustomStudioProps) {
                 />
               </div>
 
-              {/* Color Palette Selector */}
               <div>
-                <Label className="block mb-2">SPECTRUM PALETTE</Label>
-                <div className="grid grid-cols-2 gap-2">
-                  {PALETTE_PRESETS.map((p, idx) => (
-                    <button
-                      key={p.name}
-                      onClick={() => setSelectedPaletteIdx(idx)}
-                      className={`p-2 border text-left flex flex-col gap-1.5 transition-all ${
-                        selectedPaletteIdx === idx
-                          ? 'border-terminal-cyan bg-terminal-cyan/10 shadow-terminal-glow'
-                          : 'border-terminal-border hover:border-slate-500 bg-terminal-bg'
-                      }`}
-                    >
-                      <div className="text-[10px] text-slate-300 truncate">{p.name}</div>
-                      <div className="flex items-center gap-1">
-                        {p.colors.slice(0, 4).map((c, i) => (
-                          <div
-                            key={i}
-                            className="w-3 h-3 rounded-full border border-black/40"
-                            style={{ backgroundColor: c }}
-                          />
-                        ))}
-                      </div>
-                    </button>
-                  ))}
+                <div className="flex justify-between text-xs mb-1">
+                  <Label>ROTATION SPEED</Label>
+                  <span className="text-terminal-cyan">
+                    {rotationSpeed === 0 ? 'FROZEN' : `${rotationSpeed.toFixed(3)}x`}
+                  </span>
                 </div>
+                <Slider
+                  min={0.0}
+                  max={0.2}
+                  step={0.005}
+                  value={[rotationSpeed]}
+                  onValueChange={(val) => {
+                    const v = val[0];
+                    if (v !== undefined) setRotationSpeed(v);
+                  }}
+                />
+                <div className="flex gap-1.5 mt-2">
+                  <button
+                    onClick={() => setRotationSpeed(0)}
+                    className="px-2 py-0.5 text-[9px] border border-terminal-border bg-terminal-card text-terminal-dim hover:text-white"
+                  >
+                    [FREEZE]
+                  </button>
+                  <button
+                    onClick={() => setRotationSpeed(0.02)}
+                    className="px-2 py-0.5 text-[9px] border border-terminal-border bg-terminal-card text-terminal-dim hover:text-white"
+                  >
+                    [SLOW]
+                  </button>
+                  <button
+                    onClick={() => setRotationSpeed(0.05)}
+                    className="px-2 py-0.5 text-[9px] border border-terminal-border bg-terminal-card text-terminal-dim hover:text-white"
+                  >
+                    [NORMAL]
+                  </button>
+                  <button
+                    onClick={() => setRotationSpeed(0.12)}
+                    className="px-2 py-0.5 text-[9px] border border-terminal-border bg-terminal-card text-terminal-dim hover:text-white"
+                  >
+                    [FAST]
+                  </button>
+                </div>
+              </div>
+
+              {/* Color Palette & Custom Picker */}
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <Label>SPECTRUM PALETTES</Label>
+                  <button
+                    onClick={() => setUseCustomColors(!useCustomColors)}
+                    className={`text-[10px] px-2 py-0.5 border transition-all ${
+                      useCustomColors
+                        ? 'border-terminal-cyan bg-terminal-cyan/15 text-terminal-cyan'
+                        : 'border-terminal-border text-terminal-dim hover:text-slate-200'
+                    }`}
+                  >
+                    {useCustomColors ? '[CUSTOM COLOR: ON]' : '[PICK CUSTOM COLOR]'}
+                  </button>
+                </div>
+
+                {useCustomColors ? (
+                  <div className="p-3 border border-terminal-cyan/40 bg-terminal-cyan/5 flex flex-col gap-3">
+                    <div className="text-[10px] text-terminal-cyan font-semibold">
+                      CUSTOM GLOW COLOR PICKER
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <Label className="text-[10px] block mb-1">PRIMARY GLOW</Label>
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="color"
+                            value={customColor1}
+                            onChange={(e) => setCustomColor1(e.target.value)}
+                            className="w-8 h-8 rounded border border-terminal-border cursor-pointer bg-transparent"
+                          />
+                          <span className="text-xs font-mono text-slate-300">{customColor1}</span>
+                        </div>
+                      </div>
+                      <div>
+                        <Label className="text-[10px] block mb-1">SECONDARY AURORA</Label>
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="color"
+                            value={customColor2}
+                            onChange={(e) => setCustomColor2(e.target.value)}
+                            className="w-8 h-8 rounded border border-terminal-border cursor-pointer bg-transparent"
+                          />
+                          <span className="text-xs font-mono text-slate-300">{customColor2}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-2 gap-2">
+                    {PALETTE_PRESETS.map((p, idx) => (
+                      <button
+                        key={p.name}
+                        onClick={() => {
+                          setSelectedPaletteIdx(idx);
+                          setUseCustomColors(false);
+                        }}
+                        className={`p-2 border text-left flex flex-col gap-1.5 transition-all ${
+                          selectedPaletteIdx === idx && !useCustomColors
+                            ? 'border-terminal-cyan bg-terminal-cyan/10 shadow-terminal-glow'
+                            : 'border-terminal-border hover:border-slate-500 bg-terminal-bg'
+                        }`}
+                      >
+                        <div className="text-[10px] text-slate-300 truncate">{p.name}</div>
+                        <div className="flex items-center gap-1">
+                          {p.colors.slice(0, 4).map((c, i) => (
+                            <div
+                              key={i}
+                              className="w-3 h-3 rounded-full border border-black/40"
+                              style={{ backgroundColor: c }}
+                            />
+                          ))}
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
             </CardContent>
           </Card>

@@ -26,6 +26,16 @@ struct PausedPayload {
     paused: bool,
 }
 
+#[derive(Clone, Serialize)]
+struct GlowPayload {
+    intensity: f64,
+}
+
+#[derive(Clone, Serialize)]
+struct SpeedPayload {
+    speed: f64,
+}
+
 pub fn create_tray(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
     // 1. Presets Submenu
     let preset_triangle = MenuItem::with_id(app, "preset_triangle", "Triangle Prism", true, None::<&str>)?;
@@ -61,6 +71,32 @@ pub fn create_tray(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
         ],
     )?;
 
+    // 2. Glow Intensity Submenu
+    let glow_subtle = MenuItem::with_id(app, "glow_subtle", "Subtle Glow (0.75x)", true, None::<&str>)?;
+    let glow_balanced = MenuItem::with_id(app, "glow_balanced", "Balanced Glow (1.15x)", true, None::<&str>)?;
+    let glow_radiance = MenuItem::with_id(app, "glow_radiance", "High Radiance (1.8x)", true, None::<&str>)?;
+    let glow_maximum = MenuItem::with_id(app, "glow_maximum", "Maximum Aura (2.5x)", true, None::<&str>)?;
+
+    let glow_menu = Submenu::with_items(
+        app,
+        "Glow Intensity",
+        true,
+        &[&glow_subtle, &glow_balanced, &glow_radiance, &glow_maximum],
+    )?;
+
+    // 3. Rotation Speed Submenu
+    let speed_static = MenuItem::with_id(app, "speed_static", "Static (0x)", true, None::<&str>)?;
+    let speed_slow = MenuItem::with_id(app, "speed_slow", "Slow Spin (0.02x)", true, None::<&str>)?;
+    let speed_normal = MenuItem::with_id(app, "speed_normal", "Normal Spin (0.05x)", true, None::<&str>)?;
+    let speed_fast = MenuItem::with_id(app, "speed_fast", "Fast Pulse (0.12x)", true, None::<&str>)?;
+
+    let speed_menu = Submenu::with_items(
+        app,
+        "Rotation Speed",
+        true,
+        &[&speed_static, &speed_slow, &speed_normal, &speed_fast],
+    )?;
+
     // 2. FPS Cap Submenu
     let fps_15 = MenuItem::with_id(app, "fps_15", "15 FPS (Battery Saver)", true, None::<&str>)?;
     let fps_30 = MenuItem::with_id(app, "fps_30", "30 FPS (Default)", true, None::<&str>)?;
@@ -88,6 +124,8 @@ pub fn create_tray(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
         app,
         &[
             &presets_menu,
+            &glow_menu,
+            &speed_menu,
             &fps_menu,
             &scale_menu,
             &toggle_pause,
@@ -144,6 +182,30 @@ pub fn create_tray(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
                 }
                 "preset_matrix" => {
                     let _ = app_handle.emit("glowframe://set-scene", ScenePayload { preset_id: "matrix-circle" });
+                }
+                "glow_subtle" => {
+                    let _ = app_handle.emit("glowframe://set-glow-intensity", GlowPayload { intensity: 0.75 });
+                }
+                "glow_balanced" => {
+                    let _ = app_handle.emit("glowframe://set-glow-intensity", GlowPayload { intensity: 1.15 });
+                }
+                "glow_radiance" => {
+                    let _ = app_handle.emit("glowframe://set-glow-intensity", GlowPayload { intensity: 1.8 });
+                }
+                "glow_maximum" => {
+                    let _ = app_handle.emit("glowframe://set-glow-intensity", GlowPayload { intensity: 2.5 });
+                }
+                "speed_static" => {
+                    let _ = app_handle.emit("glowframe://set-rotation-speed", SpeedPayload { speed: 0.0 });
+                }
+                "speed_slow" => {
+                    let _ = app_handle.emit("glowframe://set-rotation-speed", SpeedPayload { speed: 0.02 });
+                }
+                "speed_normal" => {
+                    let _ = app_handle.emit("glowframe://set-rotation-speed", SpeedPayload { speed: 0.05 });
+                }
+                "speed_fast" => {
+                    let _ = app_handle.emit("glowframe://set-rotation-speed", SpeedPayload { speed: 0.12 });
                 }
                 "fps_15" => {
                     let _ = app_handle.emit("glowframe://set-fps-cap", FpsPayload { fps: 15 });

@@ -153,6 +153,31 @@ listen<{ scale: number }>('glowframe://set-resolution-scale', (event) => {
   renderer.setResolutionScale(event.payload.scale);
 }).catch(() => {});
 
+listen<{ intensity: number }>('glowframe://set-glow-intensity', (event) => {
+  currentScene = {
+    ...currentScene,
+    edge: {
+      ...currentScene.edge,
+      intensity: event.payload.intensity,
+    },
+  };
+  renderer.setScene(currentScene);
+}).catch(() => {});
+
+listen<{ speed: number }>('glowframe://set-rotation-speed', (event) => {
+  currentScene = {
+    ...currentScene,
+    mode: {
+      ...currentScene.mode,
+      params: {
+        ...currentScene.mode.params,
+        speed: event.payload.speed,
+      },
+    },
+  };
+  renderer.setScene(currentScene);
+}).catch(() => {});
+
 listen<{ presetId?: string; sceneData?: unknown }>('glowframe://set-scene', (event) => {
   if (event.payload.presetId && PRESET_SCENES[event.payload.presetId]) {
     const nextScene = PRESET_SCENES[event.payload.presetId];

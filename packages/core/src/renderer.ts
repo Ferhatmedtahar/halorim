@@ -125,7 +125,7 @@ export function createRenderer(options: RendererOptions): Renderer {
     u_shapePos: [0.5, 0.52],
     u_shapeScale: 0.28,
     u_shapeRotation: 0,
-    u_maxDistance: 96,
+    u_maxDistance: 256,
     u_edgeWidth: 0.004,
     u_edgeFalloff: 0.09,
     u_edgeIntensity: 1.0,

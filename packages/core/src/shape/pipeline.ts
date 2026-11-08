@@ -15,7 +15,7 @@ export interface ShapePipelineResult {
 export function buildShapePipeline(
   shape: Shape,
   gridSize: number = 1024,
-  maxDistance: number = 96,
+  maxDistance: number = 256,
 ): ShapePipelineResult {
   const rasterized = rasterizeShape(shape, gridSize, gridSize);
   const sdf = computeSdf(rasterized.mask, gridSize, gridSize, maxDistance);
@@ -43,7 +43,7 @@ export function buildShapePipeline(
 export async function buildShapePipelineAsync(
   shape: Shape,
   gridSize: number = 1024,
-  maxDistance: number = 96,
+  maxDistance: number = 256,
 ): Promise<ShapePipelineResult> {
   const rasterized = rasterizeShape(shape, gridSize, gridSize);
   const sdf = await computeSdfAsync(rasterized.mask, gridSize, gridSize, maxDistance);
