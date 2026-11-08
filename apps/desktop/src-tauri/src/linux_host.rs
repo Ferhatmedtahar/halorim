@@ -301,8 +301,16 @@ pub fn configure_linux_window(
                 }
                 gtk_win.set_app_paintable(true);
 
-                let empty_region = gtk::cairo::Region::create();
-                gtk_win.input_shape_combine_region(Some(&empty_region));
+                // Configure input region covering central interactive area around the glowing shape
+                // This leaves top bar, dock, and outer desktop icon margins 100% interactive and clickable
+                let rect = gtk::cairo::RectangleInt::new(
+                    (width as f64 * 0.22) as i32,
+                    (height as f64 * 0.25) as i32,
+                    (width as f64 * 0.56) as i32,
+                    (height as f64 * 0.62) as i32,
+                );
+                let region = gtk::cairo::Region::create_rectangle(&rect);
+                gtk_win.input_shape_combine_region(Some(&region));
                 if let Some(gdk_win) = gtk_win.window() {
                     gdk_win.lower();
                 }
@@ -459,6 +467,10 @@ pub fn start_desktop_monitor(
                                         x: 0.0,
                                         y: 0.0,
                                     };
+                                    let prev_label = format!("wallpaper-{}", prev_idx);
+                                    if let Some(win) = app_handle.get_webview_window(&prev_label) {
+                                        let _ = win.emit("glowframe://cursor-leave", leave_payload.clone());
+                                    }
                                     let _ = app_handle.emit("glowframe://cursor-leave", leave_payload);
                                 }
                             }
@@ -470,6 +482,10 @@ pub fn start_desktop_monitor(
                                     x: norm_x,
                                     y: norm_y,
                                 };
+                                let target_label = format!("wallpaper-{}", m_idx);
+                                if let Some(win) = app_handle.get_webview_window(&target_label) {
+                                    let _ = win.emit("glowframe://cursor-move", payload.clone());
+                                }
                                 let _ = app_handle.emit("glowframe://cursor-move", payload);
                                 last_x = norm_x;
                                 last_y = norm_y;
@@ -481,6 +497,10 @@ pub fn start_desktop_monitor(
                                     x: norm_x,
                                     y: norm_y,
                                 };
+                                let target_label = format!("wallpaper-{}", m_idx);
+                                if let Some(win) = app_handle.get_webview_window(&target_label) {
+                                    let _ = win.emit("glowframe://cursor-down", payload.clone());
+                                }
                                 let _ = app_handle.emit("glowframe://cursor-down", payload);
                             }
                             was_down = is_down;
@@ -490,6 +510,10 @@ pub fn start_desktop_monitor(
                                 x: 0.0,
                                 y: 0.0,
                             };
+                            let prev_label = format!("wallpaper-{}", prev_idx);
+                            if let Some(win) = app_handle.get_webview_window(&prev_label) {
+                                let _ = win.emit("glowframe://cursor-leave", leave_payload.clone());
+                            }
                             let _ = app_handle.emit("glowframe://cursor-leave", leave_payload);
                         }
                     }
@@ -575,6 +599,17 @@ mod tests {
         assert_eq!(normalize_coordinates(-100, -100, 1920, 1080), (0.0, 0.0));
         assert_eq!(normalize_coordinates(3000, 2000, 1920, 1080), (1.0, 1.0));
         assert_eq!(normalize_coordinates(50, 50, 0, 0), (0.0, 0.0));
+    }
+
+    #[test]
+    fn test_x11_pointer_query() {
+        let q = X11PointerQuery::open();
+        println!("X11PointerQuery::open is_some: {}", q.is_some());
+        if let Some(ref query) = q {
+            let res = query.query();
+            println!("X11PointerQuery::query: {:?}", res);
+            assert!(res.is_some());
+        }
     }
 
     #[test]

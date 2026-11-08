@@ -2,6 +2,7 @@ import { createRenderer } from '@glowframe/core';
 import { PRESET_SCENES, triangleScene } from '@glowframe/presets';
 import { type Scene, parseScene } from '@glowframe/schema';
 import { listen } from '@tauri-apps/api/event';
+import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow';
 import { HostInput } from './host-input.ts';
 
 const canvas = document.getElementById('wallpaper-canvas') as HTMLCanvasElement;
@@ -28,9 +29,24 @@ resize();
 renderer.start();
 
 // Multi-monitor independent palette state
-const params = new URLSearchParams(window.location.search);
-const monitorParam = params.get('monitor');
-const monitorIndex = monitorParam ? parseInt(monitorParam, 10) : 0;
+function getActiveMonitorIndex(): number {
+  try {
+    const win = getCurrentWebviewWindow();
+    if (win && win.label) {
+      const match = win.label.match(/wallpaper-(\d+)/);
+      if (match && match[1]) {
+        return parseInt(match[1], 10);
+      }
+    }
+  } catch {
+    // Non-Tauri environment fallback
+  }
+  const params = new URLSearchParams(window.location.search);
+  const monitorParam = params.get('monitor');
+  return monitorParam ? parseInt(monitorParam, 10) : 0;
+}
+
+const monitorIndex = getActiveMonitorIndex();
 const storageKey = `glowframe_palette_monitor_${monitorIndex}`;
 
 // Default palette: screen 0 -> monochrome/grey (0), screen 1 -> cyan/blue (3), etc.
