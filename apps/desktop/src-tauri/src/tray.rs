@@ -6,6 +6,12 @@ use tauri::tray::{TrayIconBuilder, TrayIconEvent};
 use tauri::{AppHandle, Emitter};
 
 #[derive(Clone, Serialize)]
+struct CustomSvgPayload {
+    /// Raw SVG text content read from disk
+    svg: String,
+}
+
+#[derive(Clone, Serialize)]
 struct ScenePayload {
     #[serde(rename = "presetId")]
     preset_id: &'static str,
@@ -116,7 +122,10 @@ pub fn create_tray(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
         &[&scale_05, &scale_075, &scale_10],
     )?;
 
-    // 4. General Controls
+    // 4. Custom SVG
+    let load_svg = MenuItem::with_id(app, "load_custom_svg", "Load Custom SVG…", true, None::<&str>)?;
+
+    // 5. General Controls
     let toggle_pause = MenuItem::with_id(app, "toggle_pause", "Pause / Resume", true, None::<&str>)?;
     let quit_item = MenuItem::with_id(app, "quit", "Quit Glowframe", true, None::<&str>)?;
 
@@ -128,6 +137,7 @@ pub fn create_tray(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
             &speed_menu,
             &fps_menu,
             &scale_menu,
+            &load_svg,
             &toggle_pause,
             &quit_item,
         ],
@@ -230,6 +240,30 @@ pub fn create_tray(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
                     let next = !current;
                     is_paused.store(next, Ordering::Relaxed);
                     let _ = app_handle.emit("glowframe://set-paused", PausedPayload { paused: next });
+                }
+                "load_custom_svg" => {
+                    // Spawn async task to open native file picker without blocking the UI thread
+                    let handle = app_handle.clone();
+                    tauri::async_runtime::spawn(async move {
+                        let picked = rfd::AsyncFileDialog::new()
+                            .set_title("Choose a Shape SVG File")
+                            .add_filter("SVG Files", &["svg"])
+                            .pick_file()
+                            .await;
+                        if let Some(file) = picked {
+                            match tokio::fs::read_to_string(file.path()).await {
+                                Ok(svg_text) => {
+                                    let _ = handle.emit(
+                                        "glowframe://load-custom-svg",
+                                        CustomSvgPayload { svg: svg_text },
+                                    );
+                                }
+                                Err(e) => {
+                                    eprintln!("[Glowframe] Failed to read SVG file: {}", e);
+                                }
+                            }
+                        }
+                    });
                 }
                 "quit" => {
                     app_handle.exit(0);
