@@ -26,6 +26,36 @@ window.addEventListener('resize', resize);
 resize();
 renderer.start();
 
+// Multi-monitor independent palette state
+const params = new URLSearchParams(window.location.search);
+const monitorParam = params.get('monitor');
+const monitorIndex = monitorParam ? parseInt(monitorParam, 10) : 0;
+const storageKey = `glowframe_palette_monitor_${monitorIndex}`;
+
+// Default palette: screen 0 -> monochrome/grey (0), screen 1 -> cyan/blue (3), etc.
+const numPalettes = currentScene.palettes.length;
+const defaultPaletteIndex = monitorIndex === 1 ? 3 : (monitorIndex % numPalettes);
+const savedPaletteStr = localStorage.getItem(storageKey);
+let targetPaletteIndex = defaultPaletteIndex;
+if (savedPaletteStr !== null) {
+  const parsed = parseInt(savedPaletteStr, 10);
+  if (!Number.isNaN(parsed) && parsed >= 0 && parsed < numPalettes) {
+    targetPaletteIndex = parsed;
+  }
+}
+
+// Advance to target palette if needed
+if (targetPaletteIndex > 0 && targetPaletteIndex < numPalettes) {
+  for (let i = 0; i < targetPaletteIndex; i++) {
+    renderer.triggerAction('next-palette');
+  }
+}
+
+function persistActivePalette() {
+  const activeIdx = renderer.getActivePaletteIndex();
+  localStorage.setItem(storageKey, String(activeIdx));
+}
+
 // Fallback local pointer events for development / interactive window mode
 canvas.addEventListener('pointermove', (e) => {
   const rect = canvas.getBoundingClientRect();
@@ -39,6 +69,7 @@ canvas.addEventListener('pointerdown', (e) => {
   const x = (e.clientX - rect.left) / rect.width;
   const y = (e.clientY - rect.top) / rect.height;
   hostInput.emitPointerDown(x, y);
+  persistActivePalette();
 });
 
 canvas.addEventListener('pointerleave', () => {
@@ -56,6 +87,7 @@ async function setupTauriEvents() {
 
     await listen<{ x: number; y: number }>('glowframe://cursor-down', (event) => {
       hostInput.emitPointerDown(event.payload.x, event.payload.y);
+      persistActivePalette();
     });
 
     await listen('glowframe://cursor-leave', () => {

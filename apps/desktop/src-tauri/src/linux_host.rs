@@ -8,6 +8,7 @@ use std::sync::Arc;
 #[cfg(target_os = "linux")]
 use std::time::Duration;
 use tauri::AppHandle;
+use tauri::Manager;
 #[cfg(target_os = "linux")]
 use tauri::Emitter;
 
@@ -50,6 +51,12 @@ pub fn detect_display_server_from_env(
 }
 
 pub fn detect_display_server() -> DisplayServer {
+    if let Ok(backend) = std::env::var("GDK_BACKEND") {
+        if backend.trim().eq_ignore_ascii_case("x11") {
+            return DisplayServer::X11;
+        }
+    }
+
     let wayland_display = std::env::var("WAYLAND_DISPLAY").ok();
     let session_type = std::env::var("XDG_SESSION_TYPE").ok();
     let current_desktop = std::env::var("XDG_CURRENT_DESKTOP").ok();
@@ -92,6 +99,37 @@ pub fn normalize_coordinates(x: i32, y: i32, screen_w: i32, screen_h: i32) -> (f
         0.0
     };
     (nx.clamp(0.0, 1.0), ny.clamp(0.0, 1.0))
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct MonitorBounds {
+    pub index: usize,
+    pub x: i32,
+    pub y: i32,
+    pub width: i32,
+    pub height: i32,
+}
+
+pub fn map_pointer_to_monitor(
+    x: i32,
+    y: i32,
+    monitors: &[MonitorBounds],
+) -> Option<(usize, f64, f64)> {
+    if monitors.is_empty() {
+        return None;
+    }
+
+    for m in monitors {
+        if x >= m.x && x < m.x + m.width && y >= m.y && y < m.y + m.height {
+            let (nx, ny) = normalize_coordinates(x - m.x, y - m.y, m.width, m.height);
+            return Some((m.index, nx, ny));
+        }
+    }
+
+    // Default to first monitor if pointer is slightly out of bounds
+    let m = &monitors[0];
+    let (nx, ny) = normalize_coordinates(x - m.x, y - m.y, m.width, m.height);
+    Some((m.index, nx, ny))
 }
 
 pub fn is_battery_saver_active() -> bool {
@@ -183,60 +221,101 @@ use gdk::prelude::*;
 use gtk::prelude::*;
 
 #[cfg(target_os = "linux")]
-pub fn configure_linux_window(window: &tauri::WebviewWindow) {
+pub fn configure_linux_window(
+    window: &tauri::WebviewWindow,
+    pos_x: i32,
+    pos_y: i32,
+    width: i32,
+    height: i32,
+) {
     let server = detect_display_server();
 
     match server {
-        DisplayServer::X11 => {
-            eprintln!("[Glowframe Linux] Configuring X11 desktop background window (_NET_WM_WINDOW_TYPE_DESKTOP)");
-            if let Ok(gtk_win) = window.gtk_window() {
-                gtk_win.set_decorated(false);
-                gtk_win.set_keep_below(true);
-                gtk_win.set_skip_taskbar_hint(true);
-                gtk_win.set_skip_pager_hint(true);
-                gtk_win.set_type_hint(gdk::WindowTypeHint::Desktop);
-                gtk_win.maximize();
-            }
-        }
-        DisplayServer::WaylandLayerShell => {
-            eprintln!("[Glowframe Linux] Configuring Wayland layer-shell background surface");
-            if let Ok(gtk_win) = window.gtk_window() {
-                gtk_win.set_decorated(false);
-                gtk_win.set_skip_taskbar_hint(true);
-                gtk_win.set_skip_pager_hint(true);
-                gtk_win.maximize();
-            }
-        }
-        DisplayServer::WaylandGnomeFallback => {
+        DisplayServer::X11 | DisplayServer::WaylandGnomeFallback => {
             eprintln!(
-                "[Glowframe Linux] Notice: Running on GNOME Wayland session.\n\
-                 GNOME Wayland compositors do not implement wlr-layer-shell.\n\
-                 Defaulting to XWayland desktop hint. Run with GDK_BACKEND=x11 or use an X11 session for complete desktop background integration.\n\
-                 See docs/LINUX.md for configuration details."
+                "[Glowframe Linux] Configuring desktop background window at ({}, {}) {}x{} (_NET_WM_WINDOW_TYPE_DESKTOP)",
+                pos_x, pos_y, width, height
             );
             if let Ok(gtk_win) = window.gtk_window() {
                 gtk_win.set_decorated(false);
-                gtk_win.set_keep_below(true);
+                gtk_win.set_skip_taskbar_hint(true);
+                gtk_win.set_skip_pager_hint(true);
+                gtk_win.set_accept_focus(false);
+                gtk_win.set_focus_on_map(false);
                 gtk_win.set_type_hint(gdk::WindowTypeHint::Desktop);
-                gtk_win.maximize();
+                gtk_win.set_keep_below(true);
+                gtk_win.move_(pos_x, pos_y);
+                gtk_win.resize(width, height);
+                if let Some(gdk_win) = gtk_win.window() {
+                    gdk_win.lower();
+                }
+                gtk_win.connect_map(|w| {
+                    if let Some(gdk_win) = w.window() {
+                        gdk_win.lower();
+                    }
+                });
+            }
+        }
+        DisplayServer::WaylandLayerShell => {
+            eprintln!(
+                "[Glowframe Linux] Configuring Wayland background window at ({}, {}) {}x{}",
+                pos_x, pos_y, width, height
+            );
+            if let Ok(gtk_win) = window.gtk_window() {
+                gtk_win.set_decorated(false);
+                gtk_win.set_skip_taskbar_hint(true);
+                gtk_win.set_skip_pager_hint(true);
+                gtk_win.set_accept_focus(false);
+                gtk_win.move_(pos_x, pos_y);
+                gtk_win.resize(width, height);
             }
         }
     }
 }
 
-pub fn start_desktop_monitor(app: AppHandle, stop_signal: Arc<AtomicBool>) {
+#[cfg(not(target_os = "linux"))]
+pub fn configure_linux_window(
+    _window: &tauri::WebviewWindow,
+    _pos_x: i32,
+    _pos_y: i32,
+    _width: i32,
+    _height: i32,
+) {}
+
+pub fn start_desktop_monitor(
+    app: AppHandle,
+    stop_signal: Arc<AtomicBool>,
+    monitors: Vec<MonitorBounds>,
+) {
     #[cfg(target_os = "linux")]
     {
         let app_handle = app.clone();
+        let mut active_monitor_idx: Option<usize> = None;
         let mut last_x = -1.0;
         let mut last_y = -1.0;
         let mut was_down = false;
         let mut was_paused = false;
         let mut check_counter = 0;
+        let mut init_lower_counter = 0;
 
         glib::timeout_add_local(Duration::from_millis(16), move || {
             if stop_signal.load(Ordering::Relaxed) {
                 return glib::ControlFlow::Break;
+            }
+
+            // For the first 30 frames (~0.5s), ensure windows remain lowered below desktop icons
+            if init_lower_counter < 30 {
+                init_lower_counter += 1;
+                for m in &monitors {
+                    let label = format!("wallpaper-{}", m.index);
+                    if let Some(win) = app_handle.get_webview_window(&label) {
+                        if let Ok(gtk_win) = win.gtk_window() {
+                            if let Some(gdk_win) = gtk_win.window() {
+                                gdk_win.lower();
+                            }
+                        }
+                    }
+                }
             }
 
             // Poll pointer position and button state from GDK display on the main thread
@@ -244,38 +323,59 @@ pub fn start_desktop_monitor(app: AppHandle, stop_signal: Arc<AtomicBool>) {
                 if let Some(seat) = display.default_seat() {
                     if let Some(pointer) = seat.pointer() {
                         if let Some(root_win) = display.default_screen().root_window() {
-                            let screen_w = root_win.width();
-                            let screen_h = root_win.height();
-
                             let (_, x, y, mask) = root_win.device_position(&pointer);
-                            let (norm_x, norm_y) =
-                                normalize_coordinates(x, y, screen_w, screen_h);
 
-                            if (norm_x - last_x).abs() > 0.0005
-                                || (norm_y - last_y).abs() > 0.0005
+                            if let Some((m_idx, norm_x, norm_y)) =
+                                map_pointer_to_monitor(x, y, &monitors)
                             {
-                                let _ = app_handle.emit(
-                                    "glowframe://cursor-move",
-                                    CursorPayload {
-                                        x: norm_x,
-                                        y: norm_y,
-                                    },
-                                );
-                                last_x = norm_x;
-                                last_y = norm_y;
-                            }
+                                // Did we cross into a different monitor?
+                                if let Some(prev_idx) = active_monitor_idx {
+                                    if prev_idx != m_idx {
+                                        let prev_label = format!("wallpaper-{}", prev_idx);
+                                        if let Some(prev_win) = app_handle.get_webview_window(&prev_label) {
+                                            let _ = prev_win.emit("glowframe://cursor-leave", ());
+                                        }
+                                    }
+                                }
+                                active_monitor_idx = Some(m_idx);
 
-                            let is_down = mask.contains(gdk::ModifierType::BUTTON1_MASK);
-                            if is_down && !was_down {
-                                let _ = app_handle.emit(
-                                    "glowframe://cursor-down",
-                                    CursorPayload {
-                                        x: norm_x,
-                                        y: norm_y,
-                                    },
-                                );
+                                let target_label = format!("wallpaper-{}", m_idx);
+
+                                if (norm_x - last_x).abs() > 0.0005
+                                    || (norm_y - last_y).abs() > 0.0005
+                                {
+                                    if let Some(win) = app_handle.get_webview_window(&target_label) {
+                                        let _ = win.emit(
+                                            "glowframe://cursor-move",
+                                            CursorPayload {
+                                                x: norm_x,
+                                                y: norm_y,
+                                            },
+                                        );
+                                    }
+                                    last_x = norm_x;
+                                    last_y = norm_y;
+                                }
+
+                                let is_down = mask.contains(gdk::ModifierType::BUTTON1_MASK);
+                                if is_down && !was_down {
+                                    if let Some(win) = app_handle.get_webview_window(&target_label) {
+                                        let _ = win.emit(
+                                            "glowframe://cursor-down",
+                                            CursorPayload {
+                                                x: norm_x,
+                                                y: norm_y,
+                                            },
+                                        );
+                                    }
+                                }
+                                was_down = is_down;
+                            } else if let Some(prev_idx) = active_monitor_idx.take() {
+                                let prev_label = format!("wallpaper-{}", prev_idx);
+                                if let Some(prev_win) = app_handle.get_webview_window(&prev_label) {
+                                    let _ = prev_win.emit("glowframe://cursor-leave", ());
+                                }
                             }
-                            was_down = is_down;
                         }
                     }
                 }
@@ -303,13 +403,54 @@ pub fn start_desktop_monitor(app: AppHandle, stop_signal: Arc<AtomicBool>) {
 
     #[cfg(not(target_os = "linux"))]
     {
-        let _ = (app, stop_signal);
+        let _ = (app, stop_signal, monitors);
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_map_pointer_to_monitor() {
+        let monitors = vec![
+            MonitorBounds {
+                index: 0,
+                x: 0,
+                y: 0,
+                width: 1920,
+                height: 1080,
+            },
+            MonitorBounds {
+                index: 1,
+                x: 1920,
+                y: 0,
+                width: 1920,
+                height: 1080,
+            },
+        ];
+
+        // Monitor 0 center
+        assert_eq!(
+            map_pointer_to_monitor(960, 540, &monitors),
+            Some((0, 0.5, 0.5))
+        );
+
+        // Monitor 1 center
+        assert_eq!(
+            map_pointer_to_monitor(2880, 540, &monitors),
+            Some((1, 0.5, 0.5))
+        );
+
+        // Monitor 1 top-left corner
+        assert_eq!(
+            map_pointer_to_monitor(1920, 0, &monitors),
+            Some((1, 0.0, 0.0))
+        );
+
+        // Empty monitors list
+        assert_eq!(map_pointer_to_monitor(500, 500, &[]), None);
+    }
 
     #[test]
     fn test_normalize_coordinates() {

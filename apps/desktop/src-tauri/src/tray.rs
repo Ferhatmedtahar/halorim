@@ -85,13 +85,13 @@ pub fn create_tray(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
 
     let is_paused = Arc::new(AtomicBool::new(false));
 
-    let mut tray_builder = TrayIconBuilder::new()
+    let tray_icon = tauri::include_image!("icons/32x32.png");
+
+    let tray_builder = TrayIconBuilder::with_id("glowframe-tray")
+        .tooltip("Glowframe")
+        .icon(tray_icon)
         .menu(&root_menu)
         .show_menu_on_left_click(true);
-
-    if let Some(icon) = app.default_window_icon() {
-        tray_builder = tray_builder.icon(icon.clone());
-    }
 
     tray_builder
         .on_menu_event(move |app_handle, event| {

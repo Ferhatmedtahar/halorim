@@ -10,19 +10,7 @@
     "frontendDist": "../dist"
   },
   "app": {
-    "windows": [
-      {
-        "title": "Glowframe Wallpaper",
-        "width": 1920,
-        "height": 1080,
-        "resizable": false,
-        "fullscreen": true,
-        "decorations": false,
-        "transparent": true,
-        "alwaysOnBottom": true,
-        "skipTaskbar": true
-      }
-    ],
+    "windows": [],
     "security": {
       "csp": null
     }
