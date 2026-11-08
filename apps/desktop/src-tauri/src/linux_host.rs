@@ -357,7 +357,7 @@ pub fn start_desktop_monitor(
         let mut check_counter = 0;
         let mut init_lower_counter = 0;
 
-        glib::timeout_add_local(Duration::from_millis(16), move || {
+        glib::timeout_add(Duration::from_millis(16), move || {
             if stop_signal.load(Ordering::Relaxed) {
                 return glib::ControlFlow::Break;
             }
