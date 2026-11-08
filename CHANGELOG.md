@@ -2,6 +2,37 @@
 
 All notable changes to the Glowframe monorepo are documented in this file.
 
+## [v0.8.0] - M8: Windows Desktop Runner (Tauri)
+
+### Added
+
+- **M8: Windows Desktop Runner (`apps/desktop`)**:
+  - **Tauri v2 Desktop Harness**:
+    - Configured lightweight Tauri v2 app with transparent, borderless, frameless webview window (`apps/desktop/src-tauri`).
+    - Webview harness (`apps/desktop/src/main.ts`) connects `@glowframe/core` with `HostInput` and listens for Tauri IPC events.
+  - **WorkerW Desktop Window Parenting (`src-tauri/src/windows_host.rs`)**:
+    - Dispatches Windows shell message `0x052C` to `Progman` to spawn the desktop `WorkerW` hierarchy.
+    - Locates the sibling `WorkerW` behind desktop icons via `EnumWindows` and `FindWindowExW(SHELLDLL_DefView)`.
+    - Parents the Tauri webview to `WorkerW` via `SetParent`, strips caption borders (`WS_CHILD | WS_CLIPSIBLINGS | WS_VISIBLE`), and positions at `HWND_BOTTOM`.
+  - **Global Input & Cursor Tracking**:
+    - Dedicated 60 Hz background thread continuously polls `GetCursorPos` across monitors, normalizes coordinates to $[0, 1]$, and emits `glowframe://cursor-move` events.
+    - Detects global mouse clicks via `GetAsyncKeyState(VK_LBUTTON)` on leading edge and emits `glowframe://cursor-down`.
+    - `HostInput` (`apps/desktop/src/host-input.ts`) implements `@glowframe/core`'s `InputSource` interface to bridge native IPC events directly into renderer springs and hit-testers.
+  - **Fullscreen & Battery Saver Monitor**:
+    - Background monitor evaluates foreground window bounds via `GetForegroundWindow`, `GetWindowRect`, and `GetMonitorInfoW` (excluding `Progman`).
+    - Inspects `GetSystemPowerStatus` for Windows Battery Saver mode.
+    - Dispatches `glowframe://set-paused` to stop WebGL render loop when a fullscreen window covers the primary monitor or battery saver is active.
+  - **Native System Tray (`src-tauri/src/tray.rs`)**:
+    - Presets menu: dynamic switching between all 6 preset scenes (`triangle-prism`, `tux-prism`, `four-pane`, `hexagon-prism`, `cyber-star`, `matrix-circle`).
+    - FPS Cap menu: 15 fps (battery saving), 30 fps (balanced), 60 fps (smooth).
+    - Resolution Scale menu: 0.5x (eco), 0.75x (balanced), 1.0x (full).
+    - Pause / Resume toggle and Quit actions.
+  - **Test Suite**:
+    - Unit tests in `apps/desktop/src/__tests__/host-input.test.ts` (3 tests) verifying coordinate normalization and subscription dispatch.
+    - Integration tests in `apps/desktop/src/__tests__/desktop-runner.test.ts` (5 tests) verifying renderer lifecycle, pause/resume signaling, IPC preset switching, and click actions.
+    - Rust unit tests in `windows_host.rs` testing normalization math and payload serialization.
+    - Verified cross-compilation with `cargo check --target x86_64-pc-windows-gnu` and `x86_64-pc-windows-msvc`.
+
 ## [v0.7.0] - M7: Export Engine and Wallpaper Library Site
 
 ### Added

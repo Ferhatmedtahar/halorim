@@ -1,0 +1,27 @@
+{
+  "name": "@glowframe/desktop",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "tauri": "tauri",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "lint": "eslint src"
+  },
+  "dependencies": {
+    "@glowframe/core": "workspace:*",
+    "@glowframe/presets": "workspace:*",
+    "@glowframe/schema": "workspace:*",
+    "@tauri-apps/api": "2.12.4"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "2.12.4",
+    "@types/node": "22.13.9",
+    "typescript": "5.8.2",
+    "vite": "8.3.6",
+    "vitest": "5.1.0"
+  }
+}
