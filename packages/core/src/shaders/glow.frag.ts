@@ -234,13 +234,13 @@ void main() {
   // --- Pure Vercel Edge Falloff & Space Expansion ---
   // 1. Razor-sharp core line
   float core = smoothstep(u_edgeWidth, 0.0, abs(d));
-  // 2. Near-band falloff (power 3.5)
+  // 2. Near-band falloff
   float nearOuter = max(u_edgeFalloff, 0.018);
   float nearFade = clamp(1.0 - max(d, 0.0) / nearOuter, 0.0, 1.0);
-  float nearBand = pow(nearFade, 3.5);
+  float nearBand = pow(nearFade, 2.8);
   // 3. Two-stage exponential far radiance expanding naturally into the black void
-  float farStage1 = exp(-max(d, 0.0) * 16.0) * 0.22;
-  float farStage2 = exp(-max(d, 0.0) * 4.5) * 0.08;
+  float farStage1 = exp(-max(d, 0.0) * 13.0) * 0.35;
+  float farStage2 = exp(-max(d, 0.0) * 3.8) * 0.14;
   float farGlow = farStage1 + farStage2;
 
   // Calibrated rim profile: never clips/blows out into washed-out white
@@ -268,7 +268,7 @@ void main() {
   } else {
     linearColor = u_bgColor + (edgeColor * rimProfile);
     float glowBrightness = max(linearColor.r, max(linearColor.g, linearColor.b));
-    outAlpha = clamp(glowBrightness * 2.5, 0.0, 1.0);
+    outAlpha = clamp(glowBrightness * 3.0, 0.0, 1.0);
   }
 
   // Screen-edge vertical fade

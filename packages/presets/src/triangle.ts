@@ -27,8 +27,8 @@ export const triangleScene: Scene = parseScene({
   },
   edge: {
     width: 0.003,
-    falloff: 0.025,
-    intensity: 0.9,
+    falloff: 0.035,
+    intensity: 0.95,
     dispersion: 0.35,
   },
   palettes: [
