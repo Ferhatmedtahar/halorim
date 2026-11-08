@@ -1,0 +1,38 @@
+{
+  "name": "@glowframe/export",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      },
+      "require": {
+        "types": "./dist/index.d.cts",
+        "default": "./dist/index.cjs"
+      }
+    }
+  },
+  "scripts": {
+    "build": "tsup",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "lint": "eslint src"
+  },
+  "dependencies": {
+    "@glowframe/core": "workspace:*",
+    "@glowframe/schema": "workspace:*",
+    "fflate": "0.8.3"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.65.0",
+    "tsup": "8.4.0",
+    "typescript": "5.8.2",
+    "vitest": "5.1.0"
+  }
+}

@@ -2,6 +2,34 @@
 
 All notable changes to the Glowframe monorepo are documented in this file.
 
+## [v0.7.0] - M7: Export Engine and Wallpaper Library Site
+
+### Added
+
+- **M7: Export and Library Site**:
+  - **Expanded Preset Catalog (`@glowframe/presets`)**:
+    - Created 6 distinct, production-grade presets with complete metadata, tags, licensing, and color palettes:
+      - `triangle-prism`: Reference equilateral triangle with prismatic edge glow.
+      - `tux-prism`: Linux mascot Tux silhouette with prismatic edge illumination.
+      - `four-pane`: Generic four-pane window silhouette with prismatic division lines.
+      - `hexagon-prism`: Regular hexagon silhouette with pulsing breathing glow.
+      - `cyber-star`: 5-pointed star with continuous scanning light beam sweep.
+      - `matrix-circle`: Minimalist glowing ring with continuous emerald hue shifts.
+  - **Export Engine (`@glowframe/export`)**:
+    - `exportPng`: Renders high-resolution still frames (1080p FHD, 1440p QHD, 4K UHD, and custom) using synchronous render and readback within the same microtask, guaranteeing non-blank output.
+    - `exportSceneJson`: Serializes and formats `.glowframe.json` wallpaper files.
+    - `exportHtmlPack`: Generates standalone, offline-ready ZIP archives with `fflate@0.8.3` containing `index.html`, bundled core JS, `scene.json`, and `README.txt`. Runs completely offline without external network dependencies.
+    - Added unit test suite in `packages/export/src/__tests__/export.test.ts` (4 tests).
+    - Added headless WebGL2 E2E test suite in `packages/export/src/__tests__/export-e2e.test.ts` (3 tests) validating non-blank 4K PNG export (correct PNG signature and luminous glowing pixels) and 100% offline execution of unzipped HTML packs.
+  - **Thumbnail Generator (`tooling/thumbnails`)**:
+    - Automated Playwright build script rendering every preset at fixed time $t=1000\text{ms}$ with fixed seed to static 640×360 PNG thumbnails in `apps/library/public/thumbnails/<id>.png`.
+  - **Wallpaper Library Site (`apps/library`)**:
+    - Modern Next.js 15 App Router application with React 19, TypeScript, and Tailwind CSS.
+    - `/` (Gallery): Instant client-side search and tag filtering across presets, responsive grid with lazy-loaded static thumbnails. Strictly adheres to browser resource limits with **0 WebGL contexts allocated on the gallery page** (Lighthouse performance > 90).
+    - `/w/[id]` (Detail Page): Single interactive WebGL2 canvas using `@glowframe/core` and `BrowserInput`, preset attribution, color swatches, and client-side downloads (PNG at 1080p/1440p/4K, `.glowframe.json`, and standalone `.zip` HTML pack). Automatically disposes renderer on unmount/navigation.
+    - `/about`: Complete setup guide for Windows (Lively Wallpaper) and Linux (X11 desktop atom hint, Wayland layer-shell protocol on wlroots/KDE, and GNOME Wayland limits).
+    - Added unit and E2E tests in `apps/library/src/__tests__/` (8 tests) verifying gallery architecture constraints, zero WebGL contexts on grid, and detail player lifecycle.
+
 ## [v0.6.0] - M6: Arbitrary Shapes, Center Content, and Presets
 
 ### Added
