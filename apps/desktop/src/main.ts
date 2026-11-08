@@ -1,6 +1,7 @@
 import { createRenderer } from '@glowframe/core';
 import { PRESET_SCENES, triangleScene } from '@glowframe/presets';
 import { type Scene, parseScene } from '@glowframe/schema';
+import { listen } from '@tauri-apps/api/event';
 import { HostInput } from './host-input.ts';
 
 const canvas = document.getElementById('wallpaper-canvas') as HTMLCanvasElement;
@@ -86,92 +87,66 @@ interface LeaveEventPayload {
   monitor?: number;
 }
 
-// Setup Tauri IPC event listeners if running inside Tauri webview
-async function setupTauriEvents() {
-  try {
-    const { listen } = await import('@tauri-apps/api/event');
-
-    const handlePointerMove = (x: number, y: number, monitor?: number) => {
-      if (monitor === undefined || monitor === monitorIndex) {
-        hostInput.emitPointerMove(x, y);
-      }
-    };
-
-    let lastDownTime = 0;
-    const handlePointerDown = (x: number, y: number, monitor?: number) => {
-      const now = performance.now();
-      if (now - lastDownTime < 120) return;
-      if (monitor === undefined || monitor === monitorIndex) {
-        lastDownTime = now;
-        hostInput.emitPointerDown(x, y);
-        persistActivePalette();
-      }
-    };
-
-    const handlePointerLeave = (monitor?: number) => {
-      if (monitor === undefined || monitor === monitorIndex) {
-        hostInput.emitPointerLeave();
-      }
-    };
-
-    // Listen on global event channel
-    await listen<CursorEventPayload>('glowframe://cursor-move', (event) => {
-      handlePointerMove(event.payload.x, event.payload.y, event.payload.monitor);
-    });
-
-    await listen<CursorEventPayload>('glowframe://cursor-down', (event) => {
-      handlePointerDown(event.payload.x, event.payload.y, event.payload.monitor);
-    });
-
-    await listen<LeaveEventPayload>('glowframe://cursor-leave', (event) => {
-      handlePointerLeave(event.payload.monitor);
-    });
-
-    // Also register on current webview window channel if available
-    try {
-      const { getCurrentWebviewWindow } = await import('@tauri-apps/api/webviewWindow');
-      const win = getCurrentWebviewWindow();
-      await win.listen<CursorEventPayload>('glowframe://cursor-move', (event) => {
-        handlePointerMove(event.payload.x, event.payload.y, event.payload.monitor);
-      });
-      await win.listen<CursorEventPayload>('glowframe://cursor-down', (event) => {
-        handlePointerDown(event.payload.x, event.payload.y, event.payload.monitor);
-      });
-      await win.listen<LeaveEventPayload>('glowframe://cursor-leave', (event) => {
-        handlePointerLeave(event.payload.monitor);
-      });
-    } catch {
-      // not in a tauri window context
-    }
-
-    await listen<{ paused: boolean }>('glowframe://set-paused', (event) => {
-      renderer.setPaused(event.payload.paused);
-    });
-
-    await listen<{ fps: number }>('glowframe://set-fps-cap', (event) => {
-      renderer.setFpsCap(event.payload.fps);
-    });
-
-    await listen<{ scale: number }>('glowframe://set-resolution-scale', (event) => {
-      renderer.setResolutionScale(event.payload.scale);
-    });
-
-    await listen<{ presetId?: string; sceneData?: unknown }>('glowframe://set-scene', (event) => {
-      if (event.payload.presetId && PRESET_SCENES[event.payload.presetId]) {
-        const nextScene = PRESET_SCENES[event.payload.presetId];
-        if (nextScene) {
-          currentScene = nextScene;
-          renderer.setScene(currentScene);
-        }
-      } else if (event.payload.sceneData) {
-        currentScene = parseScene(event.payload.sceneData);
-        renderer.setScene(currentScene);
-      }
-    });
-  } catch (err) {
-    // Running in browser dev mode without Tauri IPC
-    console.debug('Tauri API not active in current environment:', err);
+const handlePointerMove = (x: number, y: number, monitor?: number) => {
+  if (monitor === undefined || monitor === monitorIndex) {
+    hostInput.emitPointerMove(x, y);
   }
-}
+};
 
-void setupTauriEvents();
+let lastDownTime = 0;
+const handlePointerDown = (x: number, y: number, monitor?: number) => {
+  const now = performance.now();
+  if (now - lastDownTime < 120) return;
+  if (monitor === undefined || monitor === monitorIndex) {
+    lastDownTime = now;
+    hostInput.emitPointerDown(x, y);
+    persistActivePalette();
+  }
+};
+
+const handlePointerLeave = (monitor?: number) => {
+  if (monitor === undefined || monitor === monitorIndex) {
+    hostInput.emitPointerLeave();
+  }
+};
+
+// Top-level Tauri IPC listeners
+listen<CursorEventPayload>('glowframe://cursor-move', (event) => {
+  handlePointerMove(event.payload.x, event.payload.y, event.payload.monitor);
+}).catch((err) => {
+  console.debug('Tauri IPC not active in current environment:', err);
+});
+
+listen<CursorEventPayload>('glowframe://cursor-down', (event) => {
+  handlePointerDown(event.payload.x, event.payload.y, event.payload.monitor);
+}).catch(() => {});
+
+listen<LeaveEventPayload>('glowframe://cursor-leave', (event) => {
+  handlePointerLeave(event.payload.monitor);
+}).catch(() => {});
+
+listen<{ paused: boolean }>('glowframe://set-paused', (event) => {
+  renderer.setPaused(event.payload.paused);
+}).catch(() => {});
+
+listen<{ fps: number }>('glowframe://set-fps-cap', (event) => {
+  renderer.setFpsCap(event.payload.fps);
+}).catch(() => {});
+
+listen<{ scale: number }>('glowframe://set-resolution-scale', (event) => {
+  renderer.setResolutionScale(event.payload.scale);
+}).catch(() => {});
+
+listen<{ presetId?: string; sceneData?: unknown }>('glowframe://set-scene', (event) => {
+  if (event.payload.presetId && PRESET_SCENES[event.payload.presetId]) {
+    const nextScene = PRESET_SCENES[event.payload.presetId];
+    if (nextScene) {
+      currentScene = nextScene;
+      renderer.setScene(currentScene);
+    }
+  } else if (event.payload.sceneData) {
+    currentScene = parseScene(event.payload.sceneData);
+    renderer.setScene(currentScene);
+  }
+}).catch(() => {});
+

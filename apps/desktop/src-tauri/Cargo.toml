@@ -30,3 +30,4 @@ windows-sys = { version = "0.59", features = [
 gtk = "0.18"
 gdk = "0.18"
 glib = "0.18"
+x11 = "2.21.0"

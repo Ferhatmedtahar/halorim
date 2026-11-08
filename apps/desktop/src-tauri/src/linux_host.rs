@@ -265,8 +265,6 @@ pub fn sync_gnome_background() {
 }
 
 #[cfg(target_os = "linux")]
-use gdk::prelude::*;
-#[cfg(target_os = "linux")]
 use gtk::prelude::*;
 
 #[cfg(target_os = "linux")]
@@ -341,6 +339,72 @@ pub fn configure_linux_window(
     _height: i32,
 ) {}
 
+#[cfg(target_os = "linux")]
+pub struct X11PointerQuery {
+    display: *mut x11::xlib::Display,
+    root: x11::xlib::Window,
+}
+
+#[cfg(target_os = "linux")]
+unsafe impl Send for X11PointerQuery {}
+
+#[cfg(target_os = "linux")]
+impl X11PointerQuery {
+    pub fn open() -> Option<Self> {
+        unsafe {
+            let display = x11::xlib::XOpenDisplay(std::ptr::null());
+            if display.is_null() {
+                return None;
+            }
+            let root = x11::xlib::XDefaultRootWindow(display);
+            Some(Self { display, root })
+        }
+    }
+
+    pub fn query(&self) -> Option<(i32, i32, bool)> {
+        unsafe {
+            let mut root_return: x11::xlib::Window = 0;
+            let mut child_return: x11::xlib::Window = 0;
+            let mut root_x: i32 = 0;
+            let mut root_y: i32 = 0;
+            let mut win_x: i32 = 0;
+            let mut win_y: i32 = 0;
+            let mut mask: u32 = 0;
+
+            let res = x11::xlib::XQueryPointer(
+                self.display,
+                self.root,
+                &mut root_return,
+                &mut child_return,
+                &mut root_x,
+                &mut root_y,
+                &mut win_x,
+                &mut win_y,
+                &mut mask,
+            );
+
+            if res != 0 {
+                // Button1Mask in X11 = (1 << 8) = 256
+                let is_down = (mask & (1 << 8)) != 0;
+                Some((root_x, root_y, is_down))
+            } else {
+                None
+            }
+        }
+    }
+}
+
+#[cfg(target_os = "linux")]
+impl Drop for X11PointerQuery {
+    fn drop(&mut self) {
+        unsafe {
+            if !self.display.is_null() {
+                x11::xlib::XCloseDisplay(self.display);
+            }
+        }
+    }
+}
+
 pub fn start_desktop_monitor(
     app: AppHandle,
     stop_signal: Arc<AtomicBool>,
@@ -348,26 +412,16 @@ pub fn start_desktop_monitor(
 ) {
     #[cfg(target_os = "linux")]
     {
-        let app_handle = app.clone();
-        let mut active_monitor_idx: Option<usize> = None;
-        let mut last_x = -1.0;
-        let mut last_y = -1.0;
-        let mut was_down = false;
-        let mut was_paused = false;
-        let mut check_counter = 0;
+        // 1. Lower windows below desktop icons during initialization
+        let app_handle_main = app.clone();
+        let monitors_clone = monitors.clone();
         let mut init_lower_counter = 0;
-
         glib::timeout_add(Duration::from_millis(16), move || {
-            if stop_signal.load(Ordering::Relaxed) {
-                return glib::ControlFlow::Break;
-            }
-
-            // For the first 30 frames (~0.5s), ensure windows remain lowered below desktop icons
             if init_lower_counter < 30 {
                 init_lower_counter += 1;
-                for m in &monitors {
+                for m in &monitors_clone {
                     let label = format!("wallpaper-{}", m.index);
-                    if let Some(win) = app_handle.get_webview_window(&label) {
+                    if let Some(win) = app_handle_main.get_webview_window(&label) {
                         if let Ok(gtk_win) = win.gtk_window() {
                             if let Some(gdk_win) = gtk_win.window() {
                                 gdk_win.lower();
@@ -375,102 +429,90 @@ pub fn start_desktop_monitor(
                         }
                     }
                 }
+                glib::ControlFlow::Continue
+            } else {
+                glib::ControlFlow::Break
             }
+        });
 
-            // Poll pointer position and button state from GDK display on the main thread
-            if let Some(display) = gdk::Display::default() {
-                if let Some(seat) = display.default_seat() {
-                    if let Some(pointer) = seat.pointer() {
-                        if let Some(root_win) = display.default_screen().root_window() {
-                            let (_, x, y, mask) = root_win.device_position(&pointer);
+        // 2. High-performance dedicated OS polling thread for live cursor & battery saver
+        let app_handle = app.clone();
+        std::thread::spawn(move || {
+            let x11_query = X11PointerQuery::open();
+            let mut active_monitor_idx: Option<usize> = None;
+            let mut last_x = -1.0;
+            let mut last_y = -1.0;
+            let mut was_down = false;
+            let mut was_paused = false;
+            let mut check_counter = 0;
 
-                            if let Some((m_idx, norm_x, norm_y)) =
-                                map_pointer_to_monitor(x, y, &monitors)
-                            {
-                                // Did we cross into a different monitor?
-                                if let Some(prev_idx) = active_monitor_idx {
-                                    if prev_idx != m_idx {
-                                        last_x = -1.0;
-                                        last_y = -1.0;
-                                        let prev_label = format!("wallpaper-{}", prev_idx);
-                                        let leave_payload = CursorPayload {
-                                            monitor: prev_idx,
-                                            x: 0.0,
-                                            y: 0.0,
-                                        };
-                                        let _ = app_handle.emit("glowframe://cursor-leave", leave_payload.clone());
-                                        if let Some(prev_win) = app_handle.get_webview_window(&prev_label) {
-                                            let _ = prev_win.emit("glowframe://cursor-leave", leave_payload);
-                                        }
-                                    }
-                                }
-                                active_monitor_idx = Some(m_idx);
-
-                                let target_label = format!("wallpaper-{}", m_idx);
-
-                                if (norm_x - last_x).abs() > 0.0005
-                                    || (norm_y - last_y).abs() > 0.0005
-                                {
-                                    let payload = CursorPayload {
-                                        monitor: m_idx,
-                                        x: norm_x,
-                                        y: norm_y,
+            while !stop_signal.load(Ordering::Relaxed) {
+                if let Some(ref query) = x11_query {
+                    if let Some((x, y, is_down)) = query.query() {
+                        if let Some((m_idx, norm_x, norm_y)) = map_pointer_to_monitor(x, y, &monitors) {
+                            if let Some(prev_idx) = active_monitor_idx {
+                                if prev_idx != m_idx {
+                                    last_x = -1.0;
+                                    last_y = -1.0;
+                                    let leave_payload = CursorPayload {
+                                        monitor: prev_idx,
+                                        x: 0.0,
+                                        y: 0.0,
                                     };
-                                    let _ = app_handle.emit("glowframe://cursor-move", payload.clone());
-                                    if let Some(win) = app_handle.get_webview_window(&target_label) {
-                                        let _ = win.emit("glowframe://cursor-move", payload);
-                                    }
-                                    last_x = norm_x;
-                                    last_y = norm_y;
-                                }
-
-                                let is_down = mask.contains(gdk::ModifierType::BUTTON1_MASK);
-                                if is_down && !was_down {
-                                    let payload = CursorPayload {
-                                        monitor: m_idx,
-                                        x: norm_x,
-                                        y: norm_y,
-                                    };
-                                    let _ = app_handle.emit("glowframe://cursor-down", payload.clone());
-                                    if let Some(win) = app_handle.get_webview_window(&target_label) {
-                                        let _ = win.emit("glowframe://cursor-down", payload);
-                                    }
-                                }
-                                was_down = is_down;
-                            } else if let Some(prev_idx) = active_monitor_idx.take() {
-                                let prev_label = format!("wallpaper-{}", prev_idx);
-                                let leave_payload = CursorPayload {
-                                    monitor: prev_idx,
-                                    x: 0.0,
-                                    y: 0.0,
-                                };
-                                let _ = app_handle.emit("glowframe://cursor-leave", leave_payload.clone());
-                                if let Some(prev_win) = app_handle.get_webview_window(&prev_label) {
-                                    let _ = prev_win.emit("glowframe://cursor-leave", leave_payload);
+                                    let _ = app_handle.emit("glowframe://cursor-leave", leave_payload);
                                 }
                             }
+                            active_monitor_idx = Some(m_idx);
+
+                            if (norm_x - last_x).abs() > 0.0005 || (norm_y - last_y).abs() > 0.0005 {
+                                let payload = CursorPayload {
+                                    monitor: m_idx,
+                                    x: norm_x,
+                                    y: norm_y,
+                                };
+                                let _ = app_handle.emit("glowframe://cursor-move", payload);
+                                last_x = norm_x;
+                                last_y = norm_y;
+                            }
+
+                            if is_down && !was_down {
+                                let payload = CursorPayload {
+                                    monitor: m_idx,
+                                    x: norm_x,
+                                    y: norm_y,
+                                };
+                                let _ = app_handle.emit("glowframe://cursor-down", payload);
+                            }
+                            was_down = is_down;
+                        } else if let Some(prev_idx) = active_monitor_idx.take() {
+                            let leave_payload = CursorPayload {
+                                monitor: prev_idx,
+                                x: 0.0,
+                                y: 0.0,
+                            };
+                            let _ = app_handle.emit("glowframe://cursor-leave", leave_payload);
                         }
                     }
                 }
-            }
 
-            // Periodic check for battery saver status every ~250ms (every 15 frames @ 60Hz)
-            check_counter += 1;
-            if check_counter >= 15 {
-                check_counter = 0;
-                let should_pause = is_battery_saver_active();
-                if should_pause != was_paused {
-                    let _ = app_handle.emit(
-                        "glowframe://set-paused",
-                        PausedPayload {
-                            paused: should_pause,
-                        },
-                    );
-                    was_paused = should_pause;
+                // Periodic check for battery saver status every ~250ms (every 15 frames @ 60Hz)
+                check_counter += 1;
+                if check_counter >= 15 {
+                    check_counter = 0;
+                    let should_pause = is_battery_saver_active();
+                    if should_pause != was_paused {
+                        let _ = app_handle.emit(
+                            "glowframe://set-paused",
+                            PausedPayload {
+                                paused: should_pause,
+                            },
+                        );
+                        was_paused = should_pause;
+                    }
                 }
-            }
 
-            glib::ControlFlow::Continue
+                std::thread::sleep(Duration::from_millis(16));
+            }
         });
     }
 
