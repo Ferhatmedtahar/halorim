@@ -48,20 +48,16 @@ export const triangleScene: Scene = parseScene({
   interaction: {
     followCursor: true,
     sharpness: 3.5,
-    smoothing: 0.12,
+    smoothing: 0.6,
     idleOrbit: false,
     idleTimeoutMs: 1500,
   },
   onClick: {
     object: [
       { action: 'next-palette' },
-      { action: 'burst', params: { intensity: 1.2, decay: 4.0, duration: 0.4 } },
-      { action: 'ripple' },
     ],
     background: [
       { action: 'next-palette' },
-      { action: 'burst', params: { intensity: 1.2, decay: 4.0, duration: 0.4 } },
-      { action: 'ripple' },
     ],
   },
   performance: {

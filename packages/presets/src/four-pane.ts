@@ -55,7 +55,7 @@ export const fourPaneScene: Scene = parseScene({
     idleTimeoutMs: 3000,
   },
   onClick: {
-    object: [{ action: 'next-palette' }, { action: 'ripple' }],
+    object: [{ action: 'next-palette' }],
     background: [{ action: 'none' }],
   },
   performance: {

@@ -209,10 +209,44 @@ export function createRenderer(options: RendererOptions): Renderer {
     return [shapeU, shapeV];
   }
 
-  function hitTestScreen(x: number, y: number): 'object' | 'background' {
+  function isPointerInsideShape(x: number, y: number): boolean {
+    const aspect = canvas.width / Math.max(canvas.height, 1);
+    const diffX = (x - currentScene.shape.position[0]) * aspect;
+    const diffY = y - currentScene.shape.position[1];
+    const rotRad = (currentScene.shape.rotation * Math.PI) / 180;
+    const cosR = Math.cos(-rotRad);
+    const sinR = Math.sin(-rotRad);
+    const rotX = diffX * cosR - diffY * sinR;
+    const rotY = diffX * sinR + diffY * cosR;
+    const safeScale = Math.max(currentScene.shape.scale, 0.001);
+    const localX = rotX / safeScale;
+    const localY = rotY / safeScale;
+
+    if (currentScene.shape.type === 'preset' && currentScene.shape.preset === 'triangle') {
+      const e0X = 0.35;
+      const e0Y = 0.60621778265;
+      const e1X = -0.7;
+      const e1Y = 0.0;
+      const e2X = 0.35;
+      const e2Y = -0.60621778265;
+
+      const side0 = e0X * (localY - -0.40414518843) - e0Y * (localX - 0.0);
+      const side1 = e1X * (localY - 0.20207259422) - e1Y * (localX - 0.35);
+      const side2 = e2X * (localY - 0.20207259422) - e2Y * (localX - -0.35);
+
+      return (side0 <= 0 && side1 <= 0 && side2 <= 0) || (side0 >= 0 && side1 >= 0 && side2 >= 0);
+    }
+
+    if (currentScene.shape.type === 'preset' && currentScene.shape.preset === 'circle') {
+      return localX * localX + localY * localY <= 0.35 * 0.35;
+    }
+
     const [shapeU, shapeV] = screenToShapeUv(x, y);
-    const distance = shapePipeline.hitTest(shapeU, shapeV);
-    return distance < 0 ? 'object' : 'background';
+    return shapePipeline.hitTest(shapeU, shapeV) < 0;
+  }
+
+  function hitTestScreen(x: number, y: number): 'object' | 'background' {
+    return isPointerInsideShape(x, y) ? 'object' : 'background';
   }
 
   function executeAction(
@@ -444,13 +478,15 @@ export function createRenderer(options: RendererOptions): Renderer {
       targetPointerY = shapeCenter[1] + Math.sin(orbitAngle) * orbitRadius;
     }
 
+    const isInside = pointerActive && isPointerInsideShape(targetPointerX, targetPointerY);
+
     const smoothing = currentScene.interaction.smoothing;
     currentPointerX += (targetPointerX - currentPointerX) * smoothing;
     currentPointerY += (targetPointerY - currentPointerY) * smoothing;
 
     const hasCursor =
       isExplicitOrbitMode ||
-      (currentScene.interaction.followCursor && (pointerActive || shouldIdleOrbit))
+      (currentScene.interaction.followCursor && ((pointerActive && !isInside) || shouldIdleOrbit))
         ? 1.0
         : 0.0;
 
@@ -460,7 +496,8 @@ export function createRenderer(options: RendererOptions): Renderer {
     const dx = (currentPointerX - shapeX) * aspect;
     const dy = currentPointerY - shapeY;
 
-    const hoverTarget = pointerActive ? 1.0 : 0.0;
+    // Hover is active ONLY when pointer is active AND outside the shape
+    const hoverTarget = pointerActive && !isInside ? 1.0 : 0.0;
     const hoverAlpha = dt > 0 ? 1.0 - Math.exp(-dt / 0.25) : 1.0;
     hoverTransition += (hoverTarget - hoverTransition) * hoverAlpha;
     hoverTransition = Math.max(0, Math.min(1, hoverTransition));

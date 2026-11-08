@@ -210,23 +210,8 @@ void main() {
     perimeterLight = mix(0.12, 1.0, cursorBeam);
   }
 
-  // --- Cursor Directional Light ---
-  vec2 cursorDiff = v_uv - u_cursorPos;
-  cursorDiff.x *= aspect;
-  float cursorDist = length(cursorDiff);
-  vec2 dirToCursor = cursorDist > 0.0001 ? -cursorDiff / cursorDist : vec2(0.0, 1.0);
-
-  vec2 shapeCursorDir = vec2(
-    dirToCursor.x * cosR + dirToCursor.y * sinR,
-    -dirToCursor.x * sinR + dirToCursor.y * cosR
-  );
-
-  float alignment = pow(max(dot(shapeNormal, shapeCursorDir), 0.0), max(u_cursorSharpness, 0.1));
-  float attenuation = 1.0 / (1.0 + cursorDist * 4.0);
-  float cursorLight = u_hasCursor * alignment * attenuation * 0.45;
-
-  // Active edge illumination
-  float edgeLight = perimeterLight + cursorLight;
+  // Active edge illumination: purely on the shape perimeter (no cursor light blob)
+  float edgeLight = perimeterLight;
 
   // Mode modulations
   edgeLight = edgeLight * u_pulseFactor * u_flickerFactor + u_burstFactor;
