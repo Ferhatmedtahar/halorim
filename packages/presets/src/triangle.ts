@@ -12,7 +12,7 @@ export const triangleScene: Scene = parseScene({
   },
   background: {
     color: '#000000',
-    haze: { intensity: 0.6 },
+    haze: { intensity: 0.0 },
   },
   shape: {
     type: 'preset',
@@ -26,30 +26,43 @@ export const triangleScene: Scene = parseScene({
     content: null,
   },
   edge: {
-    width: 0.004,
-    falloff: 0.09,
+    width: 0.003,
+    falloff: 0.025,
     intensity: 1.0,
     dispersion: 0.35,
   },
   palettes: [
-    ['oklch(0.75 0.2 350)', 'oklch(0.7 0.2 290)', 'oklch(0.7 0.18 250)', 'oklch(0.8 0.2 150)'],
-    ['oklch(0.8 0.18 80)', 'oklch(0.7 0.22 40)', 'oklch(0.65 0.25 20)'],
+    ['#ffffff', '#e2e8f0', '#ffffff', '#cbd5e1'],
+    ['#ff1e56', '#a855f7', '#0070f3', '#00dfd8', '#10b981'],
+    ['#fbbf24', '#f59e0b', '#d97706', '#ef4444'],
+    ['#10b981', '#34d399', '#06b6d4', '#3b82f6'],
+    ['#c084fc', '#a855f7', '#7c3aed', '#ec4899'],
   ],
   mode: {
-    id: 'glow',
-    params: {},
+    id: 'rotate',
+    params: {
+      speed: 0.25,
+    },
   },
   modifiers: [],
   interaction: {
     followCursor: true,
-    sharpness: 3.0,
+    sharpness: 3.5,
     smoothing: 0.12,
-    idleOrbit: true,
-    idleTimeoutMs: 3000,
+    idleOrbit: false,
+    idleTimeoutMs: 1500,
   },
   onClick: {
-    object: [{ action: 'next-palette' }, { action: 'ripple' }],
-    background: [{ action: 'none' }],
+    object: [
+      { action: 'next-palette' },
+      { action: 'burst', params: { intensity: 1.2, decay: 4.0, duration: 0.4 } },
+      { action: 'ripple' },
+    ],
+    background: [
+      { action: 'next-palette' },
+      { action: 'burst', params: { intensity: 1.2, decay: 4.0, duration: 0.4 } },
+      { action: 'ripple' },
+    ],
   },
   performance: {
     fpsCap: 30,

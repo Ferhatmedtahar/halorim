@@ -24,6 +24,8 @@ uniform vec2 u_cursorPos;         // Normalized cursor position [0..1]
 uniform float u_cursorSharpness;  // Specular light focus
 uniform float u_hazeIntensity;    // Background haze intensity
 uniform float u_hasCursor;        // 1.0 if cursor active, 0.0 otherwise
+uniform float u_hoverTransition;  // Smooth hover weight [0..1]
+uniform float u_lightAngle;       // Perimeter light angle [radians]
 uniform float u_pulseFactor;      // Base mode: pulse multiplier (1.0 default)
 uniform float u_hueShift;         // Base mode: spectrum-cycle hue offset (0.0 default)
 uniform float u_flickerFactor;    // Base mode: neon flicker multiplier (1.0 default)
@@ -74,7 +76,7 @@ void main() {
   float extraPixels = length(boxDistVec) * 1024.0;
   float totalPixels = distPixels + extraPixels;
 
-  // Normalized distance in world scale
+  // Normalized distance in world scale (distance from shape edge)
   float d = (totalPixels / 1024.0) * safeScale;
 
   // Compute SDF surface normal via central differences
@@ -87,7 +89,7 @@ void main() {
   float gLen = length(grad);
   vec2 shapeNormal = gLen > 0.00001 ? grad / gLen : vec2(0.0, 1.0);
 
-  // Edge prism color mapped via angle around shape center
+  // Edge perimeter angle around shape center
   vec2 centerDiff = shapeUv - vec2(0.5);
   float angle = (length(centerDiff) > 0.00001) ? atan(centerDiff.y, centerDiff.x) : 0.0;
   float normAngle = fract((angle / 6.28318530718) + 0.5 + u_time * u_rotationSpeed + u_hueShift);
@@ -99,35 +101,22 @@ void main() {
   float bColor = samplePalette(normAngle + disp).b;
   vec3 edgeColor = vec3(rColor, gColor, bColor);
 
-  // Core line and exponential glow with pulse, flicker, and burst modulations
-  float safeFalloff = max(u_edgeFalloff, 0.001);
-  float modeIntensity = u_edgeIntensity * u_pulseFactor * u_flickerFactor + u_burstFactor;
-  float glow = exp(-max(d, 0.0) / safeFalloff) * modeIntensity;
-  float core = smoothstep(u_edgeWidth, 0.0, abs(d));
-
-  // Sweep highlight beam
-  float sweepBeam = 0.0;
-  if (u_sweep.w > 0.5) {
-    float dAngle = abs(normAngle - u_sweep.x);
-    dAngle = min(dAngle, 1.0 - dAngle);
-    sweepBeam = exp(-(dAngle * dAngle) / max(u_sweep.y * u_sweep.y, 0.0001)) * u_sweep.z;
+  // --- Perimeter Beam Focusing ---
+  float beam = 1.0;
+  if (u_rotationSpeed > 0.001 || u_hoverTransition > 0.001) {
+    float angleDiff = abs(angle - u_lightAngle);
+    if (angleDiff > 3.14159265) angleDiff = 6.2831853 - angleDiff;
+    beam = pow(max(cos(angleDiff), 0.0), 2.5);
+    beam = mix(0.12, 1.0, beam);
   }
+  float perimeterLight = beam;
 
-  // Transient ripple wave
-  float rippleWave = 0.0;
-  if (u_ripple.w > 0.001) {
-    float clickDist = length(shapeUv - u_ripple.xy);
-    float waveDist = abs(clickDist - u_ripple.z);
-    rippleWave = exp(-(waveDist * waveDist) / 0.0015) * u_ripple.w;
-  }
-
-  // Cursor directional illumination
+  // --- Cursor Directional Light ---
   vec2 cursorDiff = v_uv - u_cursorPos;
   cursorDiff.x *= aspect;
   float cursorDist = length(cursorDiff);
   vec2 dirToCursor = cursorDist > 0.0001 ? -cursorDiff / cursorDist : vec2(0.0, 1.0);
 
-  // Transform cursor direction into shape coordinate space
   vec2 shapeCursorDir = vec2(
     dirToCursor.x * cosR + dirToCursor.y * sinR,
     -dirToCursor.x * sinR + dirToCursor.y * cosR
@@ -135,15 +124,41 @@ void main() {
 
   float alignment = pow(max(dot(shapeNormal, shapeCursorDir), 0.0), max(u_cursorSharpness, 0.1));
   float attenuation = 1.0 / (1.0 + cursorDist * 3.5);
-  float cursorLight = u_hasCursor * alignment * attenuation * 2.0;
+  float cursorLight = u_hasCursor * alignment * attenuation * 2.2;
 
-  // Volumetric cursor haze
-  float haze = u_hasCursor * exp(-cursorDist / 0.35) * u_hazeIntensity * 0.2;
+  // Active edge illumination
+  float edgeLight = perimeterLight + cursorLight;
+
+  // Mode modulations
+  edgeLight = edgeLight * u_pulseFactor * u_flickerFactor + u_burstFactor;
+
+  // Sweep highlight beam
+  if (u_sweep.w > 0.5) {
+    float dAngle = abs(normAngle - u_sweep.x);
+    dAngle = min(dAngle, 1.0 - dAngle);
+    float sweepBeam = exp(-(dAngle * dAngle) / max(u_sweep.y * u_sweep.y, 0.0001)) * u_sweep.z;
+    edgeLight += sweepBeam;
+  }
+
+  // Transient ripple wave
+  if (u_ripple.w > 0.001) {
+    float clickDist = length(shapeUv - u_ripple.xy);
+    float waveDist = abs(clickDist - u_ripple.z);
+    edgeLight += exp(-(waveDist * waveDist) / 0.0015) * u_ripple.w;
+  }
+
+  // --- Sharp Vercel Edge Falloff ---
+  float core = smoothstep(u_edgeWidth, 0.0, abs(d));
+  float nearOuter = max(u_edgeFalloff * 0.35, 0.015);
+  float nearFade = clamp(1.0 - max(d, 0.0) / nearOuter, 0.0, 1.0);
+  float nearBand = pow(nearFade, 3.5);
+  float farGlow = exp(-max(d, 0.0) * 32.0) * 0.55;
+
+  float rimProfile = (nearBand * 0.85 + core * 0.9 + farGlow) * u_edgeIntensity * edgeLight;
 
   // Inside vs outside composition
   vec3 linearColor;
   if (d < 0.0) {
-    // Interior is solid fill (default pure black) blended with optional center content
     vec3 col = u_fillColor;
     if (u_hasContent > 0.5) {
       vec2 contentUv = (shapeUv - vec2(0.5)) / max(u_contentScale, 0.001) + vec2(0.5);
@@ -154,12 +169,17 @@ void main() {
         col = mix(col, contentRgb, alpha);
       }
     }
-    linearColor = col;
+    float occluderEdge = max(length(vec2(dFdx(d), dFdy(d))), 0.0015);
+    float occluder = clamp(0.5 - d / occluderEdge, 0.0, 1.0);
+    linearColor = mix(edgeColor * rimProfile, col, occluder);
   } else {
-    // Outside: edge prism glow modulated by cursor light, sweep, ripple, and ambient haze
-    float rimFactor = glow + core * 1.5 + (cursorLight * glow) + (sweepBeam * glow) + rippleWave;
-    linearColor = u_bgColor + (edgeColor * rimFactor) + vec3(haze);
+    linearColor = u_bgColor + (edgeColor * rimProfile);
   }
+
+  // Screen-edge vertical fade
+  float vertDist = min(v_uv.y, 1.0 - v_uv.y);
+  float screenEdgeFade = sqrt(clamp(vertDist / 0.15, 0.0, 1.0));
+  linearColor *= screenEdgeFade;
 
   linearColor = clamp(linearColor, 0.0, 1.0);
 
@@ -167,7 +187,7 @@ void main() {
   vec3 srgb = pow(linearColor, vec3(1.0 / 2.2));
 
   // Dither in sRGB space on outside rim/background to eliminate banding without lifting true black
-  if (d >= 0.0) {
+  if (d >= 0.0 && dot(srgb, vec3(1.0)) > 0.001) {
     float dither = (fract(sin(dot(gl_FragCoord.xy, vec2(12.9898, 78.233))) * 43758.5453) - 0.5) / 255.0;
     srgb = clamp(srgb + vec3(dither), 0.0, 1.0);
   }

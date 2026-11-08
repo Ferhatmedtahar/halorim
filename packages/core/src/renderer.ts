@@ -69,6 +69,7 @@ export function createRenderer(options: RendererOptions): Renderer {
   let lastPointerTime = clock.now();
   let lastAnimTime = clock.now();
   let isOrbiting = false;
+  let hoverTransition = 0.0;
   let currentPaletteIndex = 0;
 
   let activeModeId: string = currentScene.mode.id;
@@ -109,6 +110,8 @@ export function createRenderer(options: RendererOptions): Renderer {
     u_hasCursor: 0,
     u_cursorSharpness: 3.0,
     u_hazeIntensity: 0.6,
+    u_hoverTransition: 0.0,
+    u_lightAngle: 0.0,
     u_shapePos: [0.5, 0.52],
     u_shapeScale: 0.28,
     u_shapeRotation: 0,
@@ -441,6 +444,28 @@ export function createRenderer(options: RendererOptions): Renderer {
         ? 1.0
         : 0.0;
 
+    const aspect = canvas.width / Math.max(canvas.height, 1);
+    const shapeX = currentScene.shape.position[0];
+    const shapeY = currentScene.shape.position[1];
+    const dx = (currentPointerX - shapeX) * aspect;
+    const dy = currentPointerY - shapeY;
+
+    const hoverTarget = pointerActive ? 1.0 : 0.0;
+    const hoverAlpha = dt > 0 ? 1.0 - Math.exp(-dt / 0.25) : 1.0;
+    hoverTransition += (hoverTarget - hoverTransition) * hoverAlpha;
+    hoverTransition = Math.max(0, Math.min(1, hoverTransition));
+
+    const rotSpeed = modeUniforms.rotationSpeed;
+    const autoAngle = rotSpeed !== 0 ? (timeSec * rotSpeed * Math.PI * 2) % (Math.PI * 2) : 0.0;
+    let activeLightAngle = autoAngle;
+    if (hoverTransition > 0.001) {
+      const cursorAngle = Math.atan2(dy, dx);
+      let angleDiff = (cursorAngle - autoAngle) % (Math.PI * 2);
+      if (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
+      if (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
+      activeLightAngle = autoAngle + angleDiff * hoverTransition;
+    }
+
     sweepBuffer[0] = modeUniforms.sweep[0];
     sweepBuffer[1] = modeUniforms.sweep[1];
     sweepBuffer[2] = modeUniforms.sweep[2];
@@ -449,6 +474,8 @@ export function createRenderer(options: RendererOptions): Renderer {
     currentUniforms.u_cursorPos[0] = currentPointerX;
     currentUniforms.u_cursorPos[1] = currentPointerY;
     currentUniforms.u_hasCursor = hasCursor;
+    currentUniforms.u_hoverTransition = hoverTransition;
+    currentUniforms.u_lightAngle = activeLightAngle;
     currentUniforms.u_cursorSharpness = currentScene.interaction.sharpness;
     currentUniforms.u_hazeIntensity = currentScene.background.haze.intensity;
     currentUniforms.u_shapePos[0] = currentScene.shape.position[0];
@@ -560,6 +587,12 @@ export function createRenderer(options: RendererOptions): Renderer {
 
     const uCursorPosLoc = program.getUniformLocation('u_cursorPos');
     if (uCursorPosLoc) gl.uniform2f(uCursorPosLoc, currentPointerX, currentPointerY);
+
+    const uHoverLoc = program.getUniformLocation('u_hoverTransition');
+    if (uHoverLoc) gl.uniform1f(uHoverLoc, hoverTransition);
+
+    const uLightAngleLoc = program.getUniformLocation('u_lightAngle');
+    if (uLightAngleLoc) gl.uniform1f(uLightAngleLoc, activeLightAngle);
 
     const uCursorSharpLoc = program.getUniformLocation('u_cursorSharpness');
     if (uCursorSharpLoc) gl.uniform1f(uCursorSharpLoc, currentScene.interaction.sharpness);
