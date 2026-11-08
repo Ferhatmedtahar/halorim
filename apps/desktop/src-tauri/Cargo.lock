@@ -1077,6 +1077,7 @@ name = "glowframe-desktop"
 version = "0.1.0"
 dependencies = [
  "gdk",
+ "glib",
  "gtk",
  "serde",
  "serde_json",

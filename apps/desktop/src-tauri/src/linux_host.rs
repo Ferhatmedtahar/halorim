@@ -6,8 +6,6 @@ use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 #[cfg(target_os = "linux")]
-use std::thread;
-#[cfg(target_os = "linux")]
 use std::time::Duration;
 use tauri::AppHandle;
 #[cfg(target_os = "linux")]
@@ -230,75 +228,76 @@ pub fn start_desktop_monitor(app: AppHandle, stop_signal: Arc<AtomicBool>) {
     #[cfg(target_os = "linux")]
     {
         let app_handle = app.clone();
+        let mut last_x = -1.0;
+        let mut last_y = -1.0;
+        let mut was_down = false;
+        let mut was_paused = false;
+        let mut check_counter = 0;
 
-        thread::spawn(move || {
-            let mut last_x = -1.0;
-            let mut last_y = -1.0;
-            let mut was_down = false;
-            let mut was_paused = false;
-            let mut check_counter = 0;
+        glib::timeout_add_local(Duration::from_millis(16), move || {
+            if stop_signal.load(Ordering::Relaxed) {
+                return glib::ControlFlow::Break;
+            }
 
-            while !stop_signal.load(Ordering::Relaxed) {
-                // Poll pointer position and button state from GDK display
-                if let Some(display) = gdk::Display::default() {
-                    if let Some(seat) = display.default_seat() {
-                        if let Some(pointer) = seat.pointer() {
-                            if let Some(root_win) = display.default_screen().root_window() {
-                                let screen_w = root_win.width();
-                                let screen_h = root_win.height();
+            // Poll pointer position and button state from GDK display on the main thread
+            if let Some(display) = gdk::Display::default() {
+                if let Some(seat) = display.default_seat() {
+                    if let Some(pointer) = seat.pointer() {
+                        if let Some(root_win) = display.default_screen().root_window() {
+                            let screen_w = root_win.width();
+                            let screen_h = root_win.height();
 
-                                let (_, x, y, mask) = root_win.device_position(&pointer);
-                                let (norm_x, norm_y) =
-                                    normalize_coordinates(x, y, screen_w, screen_h);
+                            let (_, x, y, mask) = root_win.device_position(&pointer);
+                            let (norm_x, norm_y) =
+                                normalize_coordinates(x, y, screen_w, screen_h);
 
-                                if (norm_x - last_x).abs() > 0.0005
-                                    || (norm_y - last_y).abs() > 0.0005
-                                {
-                                    let _ = app_handle.emit(
-                                        "glowframe://cursor-move",
-                                        CursorPayload {
-                                            x: norm_x,
-                                            y: norm_y,
-                                        },
-                                    );
-                                    last_x = norm_x;
-                                    last_y = norm_y;
-                                }
-
-                                let is_down = mask.contains(gdk::ModifierType::BUTTON1_MASK);
-                                if is_down && !was_down {
-                                    let _ = app_handle.emit(
-                                        "glowframe://cursor-down",
-                                        CursorPayload {
-                                            x: norm_x,
-                                            y: norm_y,
-                                        },
-                                    );
-                                }
-                                was_down = is_down;
+                            if (norm_x - last_x).abs() > 0.0005
+                                || (norm_y - last_y).abs() > 0.0005
+                            {
+                                let _ = app_handle.emit(
+                                    "glowframe://cursor-move",
+                                    CursorPayload {
+                                        x: norm_x,
+                                        y: norm_y,
+                                    },
+                                );
+                                last_x = norm_x;
+                                last_y = norm_y;
                             }
+
+                            let is_down = mask.contains(gdk::ModifierType::BUTTON1_MASK);
+                            if is_down && !was_down {
+                                let _ = app_handle.emit(
+                                    "glowframe://cursor-down",
+                                    CursorPayload {
+                                        x: norm_x,
+                                        y: norm_y,
+                                    },
+                                );
+                            }
+                            was_down = is_down;
                         }
                     }
                 }
-
-                // Periodic check for battery saver status every ~250ms (every 15 frames @ 60Hz)
-                check_counter += 1;
-                if check_counter >= 15 {
-                    check_counter = 0;
-                    let should_pause = is_battery_saver_active();
-                    if should_pause != was_paused {
-                        let _ = app_handle.emit(
-                            "glowframe://set-paused",
-                            PausedPayload {
-                                paused: should_pause,
-                            },
-                        );
-                        was_paused = should_pause;
-                    }
-                }
-
-                thread::sleep(Duration::from_millis(16));
             }
+
+            // Periodic check for battery saver status every ~250ms (every 15 frames @ 60Hz)
+            check_counter += 1;
+            if check_counter >= 15 {
+                check_counter = 0;
+                let should_pause = is_battery_saver_active();
+                if should_pause != was_paused {
+                    let _ = app_handle.emit(
+                        "glowframe://set-paused",
+                        PausedPayload {
+                            paused: should_pause,
+                        },
+                    );
+                    was_paused = should_pause;
+                }
+            }
+
+            glib::ControlFlow::Continue
         });
     }
 

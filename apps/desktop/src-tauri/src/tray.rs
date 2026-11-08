@@ -85,9 +85,15 @@ pub fn create_tray(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
 
     let is_paused = Arc::new(AtomicBool::new(false));
 
-    TrayIconBuilder::new()
+    let mut tray_builder = TrayIconBuilder::new()
         .menu(&root_menu)
-        .show_menu_on_left_click(true)
+        .show_menu_on_left_click(true);
+
+    if let Some(icon) = app.default_window_icon() {
+        tray_builder = tray_builder.icon(icon.clone());
+    }
+
+    tray_builder
         .on_menu_event(move |app_handle, event| {
             let id = event.id.as_ref();
             match id {
