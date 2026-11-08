@@ -1,9 +1,15 @@
 use serde::Serialize;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::AtomicBool;
+#[cfg(target_os = "windows")]
+use std::sync::atomic::Ordering;
 use std::sync::Arc;
+#[cfg(target_os = "windows")]
 use std::thread;
+#[cfg(target_os = "windows")]
 use std::time::Duration;
-use tauri::{AppHandle, Emitter};
+use tauri::AppHandle;
+#[cfg(target_os = "windows")]
+use tauri::Emitter;
 
 #[derive(Clone, Serialize)]
 pub struct CursorPayload {
@@ -210,34 +216,31 @@ mod win32 {
 }
 
 pub fn start_desktop_monitor(app: AppHandle, stop_signal: Arc<AtomicBool>) {
-    let app_handle = app.clone();
+    #[cfg(target_os = "windows")]
+    {
+        let app_handle = app.clone();
 
-    thread::spawn(move || {
-        let mut last_x = -1.0;
-        let mut last_y = -1.0;
-        let mut was_down = false;
-        let mut was_paused = false;
-        let mut check_counter = 0;
+        thread::spawn(move || {
+            let mut last_x = -1.0;
+            let mut last_y = -1.0;
+            let mut was_down = false;
+            let mut was_paused = false;
+            let mut check_counter = 0;
 
-        while !stop_signal.load(Ordering::Relaxed) {
-            #[cfg(target_os = "windows")]
-            {
+            while !stop_signal.load(Ordering::Relaxed) {
                 if let Some((x, y, is_down)) = win32::poll_global_cursor() {
-                    // Send cursor movement if position delta is noticeable
                     if (x - last_x).abs() > 0.0005 || (y - last_y).abs() > 0.0005 {
                         let _ = app_handle.emit("glowframe://cursor-move", CursorPayload { x, y });
                         last_x = x;
                         last_y = y;
                     }
 
-                    // Send click down on leading edge of button press
                     if is_down && !was_down {
                         let _ = app_handle.emit("glowframe://cursor-down", CursorPayload { x, y });
                     }
                     was_down = is_down;
                 }
 
-                // Check fullscreen foreground status every ~250ms (every 15 frames @ 60Hz)
                 check_counter += 1;
                 if check_counter >= 15 {
                     check_counter = 0;
@@ -252,12 +255,16 @@ pub fn start_desktop_monitor(app: AppHandle, stop_signal: Arc<AtomicBool>) {
                         was_paused = should_pause;
                     }
                 }
-            }
 
-            // Sleep 16ms (~60 Hz rate-limiting)
-            thread::sleep(Duration::from_millis(16));
-        }
-    });
+                thread::sleep(Duration::from_millis(16));
+            }
+        });
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    {
+        let _ = (app, stop_signal);
+    }
 }
 
 pub fn attach_to_desktop(_hwnd_ptr: isize) -> bool {

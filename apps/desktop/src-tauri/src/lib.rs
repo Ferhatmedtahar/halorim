@@ -1,3 +1,4 @@
+pub mod linux_host;
 mod tray;
 pub mod windows_host;
 
@@ -22,10 +23,17 @@ pub fn run() {
                         windows_host::attach_to_desktop(hwnd.0 as isize);
                     }
                 }
+                windows_host::start_desktop_monitor(handle.clone(), stop_signal_clone);
             }
 
-            // Start global cursor tracking, click hook, and fullscreen monitor
-            windows_host::start_desktop_monitor(handle.clone(), stop_signal_clone);
+            // On Linux, configure X11 desktop type atom hint or Wayland layer-shell background
+            #[cfg(target_os = "linux")]
+            {
+                if let Some(window) = app.get_webview_window("main") {
+                    linux_host::configure_linux_window(&window);
+                }
+                linux_host::start_desktop_monitor(handle.clone(), stop_signal_clone);
+            }
 
             Ok(())
         })

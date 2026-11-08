@@ -210,4 +210,38 @@ describe('Desktop Runner Webview Engine & Host Input Integration', () => {
 
     renderer.dispose();
   });
+
+  it('handles Linux host input and battery saver power pause signals', () => {
+    const canvas = createMockCanvas();
+    const input = new HostInput();
+    const clock = new ManualClock(2000);
+
+    const renderer = createRenderer({
+      canvas,
+      scene: triangleScene,
+      input,
+      clock,
+    });
+
+    // Start running
+    renderer.start();
+    expect(renderer.isRunning).toBe(true);
+    expect(renderer.isPaused).toBe(false);
+
+    // Simulate Linux host battery saver signal
+    renderer.setPaused(true);
+    expect(renderer.isPaused).toBe(true);
+
+    // Simulate Linux pointer movement while paused (should track target)
+    input.emitPointerMove(0.2, 0.8);
+    const target = renderer.getTargetCursorPosition();
+    expect(target[0]).toBeCloseTo(0.2);
+    expect(target[1]).toBeCloseTo(0.8);
+
+    // Resume when AC power restored
+    renderer.setPaused(false);
+    expect(renderer.isPaused).toBe(false);
+
+    renderer.dispose();
+  });
 });

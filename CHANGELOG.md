@@ -2,6 +2,34 @@
 
 All notable changes to the Glowframe monorepo are documented in this file.
 
+## [v0.9.0] - M9: Linux Desktop Runner (X11 & Wayland)
+
+### Added
+
+- **M9: Linux Desktop Runner (`apps/desktop/src-tauri/src/linux_host.rs`)**:
+  - **Display Server Environment Detection**:
+    - Automatic detection across X11, Wayland with `wlr-layer-shell` support (Hyprland, Sway, River, Wayfire, KDE Plasma), and GNOME on Wayland sessions.
+  - **X11 Desktop Window Hint Integration**:
+    - Applies EWMH/NetWM desktop hints: `_NET_WM_WINDOW_TYPE_DESKTOP` and `_NET_WM_STATE_BELOW`.
+    - Strips window decorations, sets skip taskbar/pager hints, maximizes across the monitor geometry, and lowers behind all desktop clients.
+  - **Wayland Layer-Shell Architecture**:
+    - Defines `WaylandLayerShellConfig` targeting `ZWLR_LAYER_SHELL_V1_LAYER_BACKGROUND` (Layer 0), with all 4 edge anchors (`15`), exclusive zone `-1` (no panel displacement), and zero keyboard interactivity.
+  - **GNOME on Wayland Fallback & Documentation**:
+    - Transparently documents Mutter's lack of `wlr-layer-shell` support.
+    - Implements graceful fallback to XWayland desktop mode with informative runtime logging.
+    - Created `docs/LINUX.md` providing step-by-step setup for X11, Sway, Hyprland, KDE, GNOME on Xorg, `GDK_BACKEND=x11`, and GNOME Shell extensions.
+  - **Power & Fullscreen Management**:
+    - Evaluates ACPI platform profile (`power-saver` / `low-power`) and battery discharging state with low-capacity threshold (< 20%) via `/sys/class/power_supply`.
+    - Automatically pauses WebGL render loop (`glowframe://set-paused`) when on battery saver or under fullscreen applications to minimize power consumption.
+  - **Global Cursor & Click Tracking**:
+    - Queries root window pointer position and button masks via GDK at ~60 Hz, normalizing coordinates to $[0, 1]$ and dispatching `glowframe://cursor-move` and `glowframe://cursor-down` to `@glowframe/core` via `HostInput`.
+  - **Systemd User Service Integration**:
+    - Documented systemd user service unit template (`~/.config/systemd/user/glowframe.service`) for running as a daemon on login.
+  - **Test Suite**:
+    - Added Rust unit test suite in `linux_host.rs` (10 tests passing across `windows_host` and `linux_host`) verifying display server detection, battery saver evaluation, coordinate normalization, X11 atom hints, and Wayland layer shell defaults.
+    - Added TypeScript integration test in `apps/desktop/src/__tests__/desktop-runner.test.ts` (9 tests passing) testing Linux host input tracking and power save pause signals.
+    - Verified cross-compilation across native Linux, `x86_64-pc-windows-gnu`, and `x86_64-pc-windows-msvc`.
+
 ## [v0.8.0] - M8: Windows Desktop Runner (Tauri)
 
 ### Added

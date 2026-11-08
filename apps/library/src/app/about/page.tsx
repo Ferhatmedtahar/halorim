@@ -90,8 +90,10 @@ export default function AboutPage() {
 
             <div className="p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-200 text-xs">
               <strong>Notice on GNOME Wayland:</strong> GNOME Shell does not support the
-              wlr-layer-shell protocol. On GNOME under Wayland, use an XWayland desktop fallback or
-              standalone browser window mode.
+              wlr-layer-shell protocol. On GNOME under Wayland, launch with{' '}
+              <code className="text-amber-300">GDK_BACKEND=x11</code>, log into a &quot;GNOME on
+              Xorg&quot; session, or load the HTML pack into a GNOME background extension. See{' '}
+              <code className="text-amber-300">docs/LINUX.md</code> for full details.
             </div>
           </div>
         </section>
