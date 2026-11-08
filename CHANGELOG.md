@@ -2,6 +2,30 @@
 
 All notable changes to the Glowframe monorepo are documented in this file.
 
+## [v0.6.0] - M6: Arbitrary Shapes, Center Content, and Presets
+
+### Added
+
+- **M6: Arbitrary Shapes, Center Content, and Presets**:
+  - Implemented arbitrary shape rasterization pipeline in `packages/core/src/shape/rasterize.ts`:
+    - `preset`: `triangle`, `circle`, `rounded-rect`, `star`, `hexagon`, `polygon`.
+    - `svg-path`: Raw SVG path string `d` with `viewBox` scaling, translation, and padding.
+    - `svg-file`: SVG markup parsing, extracting `viewBox` and combining path elements.
+    - `text`: Text silhouette rasterization with configurable font family and weight.
+  - Implemented asynchronous Web Worker Felzenszwalb EDT computation in `packages/core/src/shape/worker.ts` with zero-copy `ArrayBuffer` transferables, ensuring the main UI thread never blocks during shape distance field generation.
+  - Implemented Center Content Layer (`packages/core/src/content/rasterize.ts`):
+    - Supports `image`, `svg`, and `text` content inside the shape interior.
+    - Strict silhouette mask clipping in fragment shader: content is displayed only when $d < 0$, blending with `u_fillColor` via opacity and optional tint.
+    - Dynamic visibility toggling via the `toggle-content` action.
+  - Graceful error handling: bad or empty SVGs fail cleanly with typed `AssetLoadError` without crashing or producing a blank screen.
+  - Created `@glowframe/presets` package (`packages/presets/`):
+    - `triangle-prism`: Reference equilateral triangle.
+    - `tux-prism`: Linux mascot Tux silhouette with glowing prismatic edge lighting.
+    - `four-pane`: Generic four-pane window silhouette with prismatic division lines.
+  - Golden frame screenshots generated and verified: `golden-tux.png`, `golden-four-pane.png`.
+  - Added unit test suite in `packages/core/src/__tests__/shape.test.ts` (12 tests) and `@glowframe/presets` (4 tests).
+  - Added headless WebGL2 Playwright e2e test suite in `packages/core/src/__tests__/shapes.e2e.test.ts` (5 tests) verifying Tux rendering, click hit-testing inside silhouette, four-pane dividing cross, center content toggling, and graceful recovery from corrupt SVGs.
+
 ## [v0.5.0] - M5: Modes and Effects Catalog
 
 ### Added

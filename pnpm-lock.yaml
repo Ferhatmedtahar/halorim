@@ -52,6 +52,22 @@ importers:
         specifier: 5.1.0
         version: 5.1.0(@types/node@22.13.9)(vite@8.3.6(@types/node@22.13.9)(esbuild@0.25.12))
 
+  packages/presets:
+    dependencies:
+      '@glowframe/schema':
+        specifier: workspace:*
+        version: link:../schema
+    devDependencies:
+      tsup:
+        specifier: 8.4.0
+        version: 8.4.0(postcss@8.5.32)(typescript@5.8.2)
+      typescript:
+        specifier: 5.8.2
+        version: 5.8.2
+      vitest:
+        specifier: 5.1.0
+        version: 5.1.0(@types/node@22.13.9)(vite@8.3.6(@types/node@22.13.9)(esbuild@0.25.12))
+
   packages/schema:
     dependencies:
       zod:

@@ -4,7 +4,8 @@ import { SystemClock } from './clock.js';
 import { NoopInput } from './input/noop.js';
 import { getWebGL2Context } from './gl/context.js';
 import { createQuadMesh, type QuadMesh } from './gl/quad.js';
-import { createR8Texture, type GlTexture } from './gl/texture.js';
+import { createR8Texture, createRgbaTexture, type GlTexture } from './gl/texture.js';
+import { rasterizeCenterContent, type ContentTextureResult } from './content/rasterize.js';
 import { createShaderProgram, type ShaderProgram } from './gl/program.js';
 import { QUAD_VERTEX_SHADER } from './shaders/quad.vert.js';
 import { GLOW_FRAGMENT_SHADER } from './shaders/glow.frag.js';
@@ -97,6 +98,7 @@ export function createRenderer(options: RendererOptions): Renderer {
   const bgColorBuffer = new Float32Array(3);
   const sweepBuffer = new Float32Array(4);
   const rippleBuffer = new Float32Array(4);
+  const contentTintBuffer = new Float32Array(4);
   const tempLinearRgb: [number, number, number] = [0, 0, 0];
   const paletteSprings = createPaletteSprings(8);
   let activePaletteOklab: ColorOKLab[] = [];
@@ -123,6 +125,7 @@ export function createRenderer(options: RendererOptions): Renderer {
     u_sweep: [0, 0.08, 1.8, 0],
     u_ripple: [0.5, 0.5, 0, 0],
     u_burstFactor: 0,
+    u_hasContent: 0,
   };
 
   let gl: WebGL2RenderingContext = getWebGL2Context(canvas);
@@ -134,6 +137,13 @@ export function createRenderer(options: RendererOptions): Renderer {
     shapePipeline.sdf.width,
     shapePipeline.sdf.height,
     shapePipeline.sdf.r8Data,
+  );
+  let contentResult: ContentTextureResult = rasterizeCenterContent(currentScene.fill.content);
+  let contentTexture: GlTexture = createRgbaTexture(
+    gl,
+    contentResult.width,
+    contentResult.height,
+    contentResult.data,
   );
 
   function refreshColors(scene: Scene, immediate: boolean = true): void {
@@ -316,6 +326,12 @@ export function createRenderer(options: RendererOptions): Renderer {
         shapePipeline.sdf.height,
         shapePipeline.sdf.r8Data,
       );
+      contentTexture = createRgbaTexture(
+        gl,
+        contentResult.width,
+        contentResult.height,
+        contentResult.data,
+      );
       if (isRunning && !isPaused) {
         lastFrameTime = clock.now();
         scheduleNextFrame();
@@ -459,12 +475,21 @@ export function createRenderer(options: RendererOptions): Renderer {
     currentUniforms.u_ripple[3] = rippleBuffer[3];
     currentUniforms.u_burstFactor = burstFactor;
 
+    const hasContent = isContentVisible && currentScene.fill.content !== null ? 1.0 : 0.0;
+    currentUniforms.u_hasContent = hasContent;
+
+    contentTintBuffer[0] = contentResult.tint[0];
+    contentTintBuffer[1] = contentResult.tint[1];
+    contentTintBuffer[2] = contentResult.tint[2];
+    contentTintBuffer[3] = contentResult.tint[3];
+
     gl.viewport(0, 0, canvas.width, canvas.height);
     gl.clearColor(0.0, 0.0, 0.0, 1.0);
     gl.clear(gl.COLOR_BUFFER_BIT);
 
     program.use();
     sdfTexture.bind(0);
+    contentTexture.bind(1);
 
     const uSdfLoc = program.getUniformLocation('u_sdf');
     if (uSdfLoc) gl.uniform1i(uSdfLoc, 0);
@@ -545,6 +570,21 @@ export function createRenderer(options: RendererOptions): Renderer {
     const uHasCursorLoc = program.getUniformLocation('u_hasCursor');
     if (uHasCursorLoc) gl.uniform1f(uHasCursorLoc, hasCursor);
 
+    const uContentTexLoc = program.getUniformLocation('u_contentTexture');
+    if (uContentTexLoc) gl.uniform1i(uContentTexLoc, 1);
+
+    const uHasContentLoc = program.getUniformLocation('u_hasContent');
+    if (uHasContentLoc) gl.uniform1f(uHasContentLoc, hasContent);
+
+    const uContentScaleLoc = program.getUniformLocation('u_contentScale');
+    if (uContentScaleLoc) gl.uniform1f(uContentScaleLoc, contentResult.scale);
+
+    const uContentOpacityLoc = program.getUniformLocation('u_contentOpacity');
+    if (uContentOpacityLoc) gl.uniform1f(uContentOpacityLoc, contentResult.opacity);
+
+    const uContentTintLoc = program.getUniformLocation('u_contentTint');
+    if (uContentTintLoc) gl.uniform4fv(uContentTintLoc, contentTintBuffer);
+
     quad.draw();
   }
 
@@ -604,6 +644,8 @@ export function createRenderer(options: RendererOptions): Renderer {
         shapePipeline.sdf.height,
         shapePipeline.sdf.r8Data,
       );
+      contentResult = rasterizeCenterContent(currentScene.fill.content);
+      contentTexture.updateData(contentResult.width, contentResult.height, contentResult.data);
       updateCanvasDimensions();
 
       if (!isRunning) {
@@ -663,6 +705,7 @@ export function createRenderer(options: RendererOptions): Renderer {
 
       quad.dispose();
       sdfTexture.dispose();
+      contentTexture.dispose();
       program.dispose();
     },
 

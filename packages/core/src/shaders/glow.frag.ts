@@ -30,6 +30,11 @@ uniform float u_flickerFactor;    // Base mode: neon flicker multiplier (1.0 def
 uniform vec4 u_sweep;             // Base mode: sweep [angle, width, intensity, active]
 uniform vec4 u_ripple;            // Click effect: ripple [originU, originV, radius, intensity]
 uniform float u_burstFactor;      // Click effect: burst flash multiplier (0.0 default)
+uniform sampler2D u_contentTexture; // Center content RGBA texture
+uniform float u_hasContent;       // 1.0 if center content active, 0.0 otherwise
+uniform float u_contentScale;     // Relative scale of center content
+uniform float u_contentOpacity;   // Center content alpha opacity
+uniform vec4 u_contentTint;       // Optional tint overlay [r, g, b, active]
 
 vec3 samplePalette(float t) {
   if (u_paletteCount <= 1) return u_palette[0].rgb;
@@ -138,8 +143,18 @@ void main() {
   // Inside vs outside composition
   vec3 linearColor;
   if (d < 0.0) {
-    // Interior is solid fill (default pure black)
-    linearColor = u_fillColor;
+    // Interior is solid fill (default pure black) blended with optional center content
+    vec3 col = u_fillColor;
+    if (u_hasContent > 0.5) {
+      vec2 contentUv = (shapeUv - vec2(0.5)) / max(u_contentScale, 0.001) + vec2(0.5);
+      if (contentUv.x >= 0.0 && contentUv.x <= 1.0 && contentUv.y >= 0.0 && contentUv.y <= 1.0) {
+        vec4 texSample = texture(u_contentTexture, contentUv);
+        vec3 contentRgb = (u_contentTint.w > 0.5) ? u_contentTint.rgb : texSample.rgb;
+        float alpha = texSample.a * u_contentOpacity;
+        col = mix(col, contentRgb, alpha);
+      }
+    }
+    linearColor = col;
   } else {
     // Outside: edge prism glow modulated by cursor light, sweep, ripple, and ambient haze
     float rimFactor = glow + core * 1.5 + (cursorLight * glow) + (sweepBeam * glow) + rippleWave;

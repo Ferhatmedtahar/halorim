@@ -43,6 +43,7 @@ export interface UniformState {
   u_sweep: [number, number, number, number];
   u_ripple: [number, number, number, number];
   u_burstFactor: number;
+  u_hasContent: number;
 }
 
 export interface Renderer {

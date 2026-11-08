@@ -2,15 +2,37 @@ export { createRenderer } from './renderer.js';
 
 export type { Renderer, RendererOptions, InputSource, InputHandlers, Clock } from './types.js';
 
-export { UnsupportedError, WebGLContextLostError, RenderError } from './errors.js';
+export {
+  UnsupportedError,
+  WebGLContextLostError,
+  RenderError,
+  AssetLoadError,
+  ShapeRasterizationError,
+} from './errors.js';
 
 export { exampleScene } from '@glowframe/schema';
 
 export { SystemClock, ManualClock } from './clock.js';
 export { BrowserInput, NoopInput } from './input/index.js';
-export { buildShapePipeline, type ShapePipelineResult } from './shape/pipeline.js';
+export {
+  buildShapePipeline,
+  buildShapePipelineAsync,
+  type ShapePipelineResult,
+} from './shape/pipeline.js';
 export { computeSdf, type SdfData } from './shape/edt.js';
-export { rasterizeShape, getTriangleVertices } from './shape/rasterize.js';
+export { computeSdfAsync } from './shape/worker.js';
+export {
+  rasterizeShape,
+  parseSvgString,
+  getTriangleVertices,
+  getStarVertices,
+  getRegularPolygonVertices,
+  rasterizePolygon,
+  rasterizeCircle,
+  rasterizeRoundedRect,
+  type RasterizedMask,
+} from './shape/rasterize.js';
+export { rasterizeCenterContent, type ContentTextureResult } from './content/rasterize.js';
 export {
   parseColorToOklab,
   parseColorToLinearSrgb,
