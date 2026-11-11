@@ -31,7 +31,7 @@ const DialogContent = React.forwardRef<
     <DialogPrimitive.Content
       ref={ref}
       className={cn(
-        'fixed left-[50%] top-[50%] z-50 grid w-full max-w-lg translate-x-[-50%] translate-y-[-50%] gap-4 border border-terminal-border bg-terminal-bg p-6 shadow-2xl duration-200 font-mono text-slate-100 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 sm:max-w-xl',
+        'fixed left-[50%] top-[50%] z-50 grid w-full max-w-lg translate-x-[-50%] translate-y-[-50%] gap-4 rounded-2xl bg-surface p-6 duration-slow text-fg data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 sm:max-w-xl',
         className
       )}
       {...props}
@@ -47,7 +47,7 @@ const DialogHeader = ({
   ...props
 }: React.HTMLAttributes<HTMLDivElement>) => (
   <div
-    className={cn('flex flex-col space-y-1.5 text-left border-b border-terminal-border pb-3', className)}
+    className={cn('flex flex-col space-y-1.5 text-left pb-3', className)}
     {...props}
   />
 );
@@ -59,7 +59,7 @@ const DialogFooter = ({
 }: React.HTMLAttributes<HTMLDivElement>) => (
   <div
     className={cn(
-      'flex flex-col-reverse sm:flex-row sm:justify-end sm:space-x-2 border-t border-terminal-border pt-3',
+      'flex flex-col-reverse sm:flex-row sm:justify-end sm:space-x-2 pt-3',
       className
     )}
     {...props}
@@ -73,7 +73,7 @@ const DialogTitle = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <DialogPrimitive.Title
     ref={ref}
-    className={cn('text-sm font-semibold tracking-wider text-terminal-cyan flex items-center gap-2', className)}
+    className={cn('text-lg font-medium text-fg flex items-center gap-2', className)}
     {...props}
   />
 ));
@@ -85,7 +85,7 @@ const DialogDescription = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <DialogPrimitive.Description
     ref={ref}
-    className={cn('text-xs text-terminal-dim', className)}
+    className={cn('text-sm text-muted', className)}
     {...props}
   />
 ));

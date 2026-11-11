@@ -92,45 +92,37 @@ export default function WallpaperPlayer({ scene }: WallpaperPlayerProps) {
   return (
     <div
       ref={containerRef}
-      className={`relative w-full aspect-video overflow-hidden bg-black border border-terminal-border shadow-2xl font-mono ${
-        isFullscreen ? 'fixed inset-0 z-50 border-none aspect-auto' : ''
+      className={`group relative w-full overflow-hidden bg-black ${
+        isFullscreen ? 'fixed inset-0 z-50 aspect-auto' : 'aspect-video rounded-2xl'
       }`}
     >
-      <canvas ref={canvasRef} className="w-full h-full block cursor-crosshair" />
-
-      {/* Terminal HUD telemetry */}
-      <div className="absolute top-3 left-3 text-terminal-cyan text-[10px] pointer-events-none opacity-70">
-        ┌─ [LIVE_WEBGL2_PIPELINE]
-      </div>
-      <div className="absolute bottom-3 right-3 text-terminal-cyan text-[10px] pointer-events-none opacity-70">
-        [POINTER_INPUT: ACTIVE] ─┘
-      </div>
+      <canvas ref={canvasRef} className="block h-full w-full cursor-crosshair" />
 
       {!isSupported && (
-        <div className="absolute inset-0 flex items-center justify-center bg-black/90 text-white p-6 text-center">
-          <p className="text-xs text-terminal-pink border border-terminal-pink/40 bg-terminal-pink/10 p-4">
-            [ERR_WEBGL2_UNSUPPORTED]: WebGL2 context initialization failed.
+        <div className="absolute inset-0 flex items-center justify-center bg-black p-6 text-center">
+          <p className="max-w-sm text-sm text-muted">
+            WebGL2 is not available in this browser, so the live preview cannot run. You can still download the
+            wallpaper.
           </p>
         </div>
       )}
 
-      {/* Floating HUD Controls */}
-      <div className="absolute top-3 right-3 flex items-center gap-2">
+      <div className="absolute right-3 top-3">
         <Button
-          variant="terminal"
+          variant="secondary"
           size="sm"
           onClick={toggleFullscreen}
-          className="text-[10px] h-7 px-2.5 flex items-center gap-1.5"
-          title="Toggle Fullscreen"
+          className="bg-black/60 backdrop-blur-md hover:bg-black/80"
+          aria-label={isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
         >
-          {isFullscreen ? <Minimize2 className="w-3 h-3" /> : <Maximize2 className="w-3 h-3" />}
-          <span>{isFullscreen ? 'EXIT_FULLSCREEN' : 'FULLSCREEN'}</span>
+          {isFullscreen ? <Minimize2 className="h-3.5 w-3.5" /> : <Maximize2 className="h-3.5 w-3.5" />}
+          {isFullscreen ? 'Exit' : 'Fullscreen'}
         </Button>
       </div>
 
-      <div className="absolute bottom-3 left-3 bg-terminal-bg/85 border border-terminal-border text-terminal-dim text-[10px] px-2.5 py-1 pointer-events-none">
-        &gt; Move cursor to guide rim light &bull; Click to cycle spectrum
-      </div>
+      <p className="pointer-events-none absolute bottom-3 left-4 text-[13px] text-muted">
+        Move the cursor to steer the light. Click to change colors.
+      </p>
     </div>
   );
 }

@@ -30,6 +30,7 @@ export const phantomScene: Scene = parseScene({
     type: 'svg-path',
     d: PHANTOM_SVG_PATH,
     viewBox: [0, 0, 100, 100],
+    closeGaps: 0,
     position: [0.5, 0.52],
     scale: 0.33,
     rotation: 0,

@@ -129,11 +129,17 @@ export async function computeSdfAsync(
 
         worker.onmessage = (e: MessageEvent) => {
           worker.terminate();
+          const cpuDistances = e.data.cpuDistances as Float32Array;
+          const floatData = new Float32Array(cpuDistances.length);
+          for (let i = 0; i < cpuDistances.length; i++) {
+            floatData[i] = cpuDistances[i]! / e.data.width;
+          }
           resolve({
             width: e.data.width,
             height: e.data.height,
             maxDistance: e.data.maxDistance,
-            cpuDistances: e.data.cpuDistances,
+            cpuDistances,
+            floatData,
             r8Data: e.data.r8Data,
           });
         };

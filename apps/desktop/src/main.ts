@@ -2,6 +2,7 @@ import { createRenderer } from '@glowframe/core';
 import { PRESET_SCENES, triangleScene } from '@glowframe/presets';
 import { type Scene, parseScene } from '@glowframe/schema';
 import { listen } from '@tauri-apps/api/event';
+import { invoke } from '@tauri-apps/api/core';
 import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow';
 import { HostInput } from './host-input.ts';
 
@@ -12,6 +13,8 @@ if (!canvas) {
 
 const hostInput = new HostInput();
 let currentScene: Scene = triangleScene;
+// The selected scene before shared overrides (glow/speed) are layered on top.
+let baseScene: Scene = triangleScene;
 
 const renderer = createRenderer({
   canvas,
@@ -47,31 +50,139 @@ function getActiveMonitorIndex(): number {
 }
 
 const monitorIndex = getActiveMonitorIndex();
+
+// Forward errors to the host log file (~/.config/glowframe/glowframe.log) so problems on a screen
+// that nobody is looking at can still be diagnosed.
+function hostLog(level: string, message: string) {
+  void invoke('log_line', { line: `[monitor ${monitorIndex}] ${level}: ${message}` }).catch(() => {});
+}
+window.addEventListener('error', (e) => hostLog('error', `${e.message} @ ${e.filename}:${e.lineno}`));
+window.addEventListener('unhandledrejection', (e) => hostLog('rejection', String(e.reason)));
+const originalConsoleError = console.error.bind(console);
+console.error = (...args: unknown[]) => {
+  originalConsoleError(...args);
+  hostLog('console.error', args.map(String).join(' '));
+};
+hostLog('info', `started, visibility=${document.visibilityState}`);
 const storageKey = `glowframe_palette_monitor_${monitorIndex}`;
 
-// Default palette: screen 0 -> monochrome/grey (0), screen 1 -> cyan/blue (3), etc.
-const numPalettes = currentScene.palettes.length;
-const defaultPaletteIndex = monitorIndex === 1 ? 3 : (monitorIndex % numPalettes);
-const savedPaletteStr = localStorage.getItem(storageKey);
-let targetPaletteIndex = defaultPaletteIndex;
-if (savedPaletteStr !== null) {
-  const parsed = parseInt(savedPaletteStr, 10);
-  if (!Number.isNaN(parsed) && parsed >= 0 && parsed < numPalettes) {
-    targetPaletteIndex = parsed;
+// Colors are per-screen; everything else (shape, glow, speed) is shared by all screens.
+// Default palette: screen 0 -> first (brand) palette, screen 1 -> a contrasting one.
+function storedPaletteIndex(): number {
+  const n = currentScene.palettes.length;
+  const fallback = monitorIndex === 0 ? 0 : Math.min(monitorIndex * 2, n - 1);
+  const saved = localStorage.getItem(storageKey);
+  if (saved !== null) {
+    const parsed = parseInt(saved, 10);
+    if (!Number.isNaN(parsed) && parsed >= 0 && parsed < n) return parsed;
   }
-}
-
-// Advance to target palette if needed
-if (targetPaletteIndex > 0 && targetPaletteIndex < numPalettes) {
-  for (let i = 0; i < targetPaletteIndex; i++) {
-    renderer.triggerAction('next-palette');
-  }
+  return fallback;
 }
 
 function persistActivePalette() {
   const activeIdx = renderer.getActivePaletteIndex();
   localStorage.setItem(storageKey, String(activeIdx));
+  scheduleSnapshot();
 }
+
+// Settings shared across screens (persisted so a restart keeps them).
+interface SharedSettings {
+  presetId?: string;
+  glow?: number;
+  speed?: number;
+}
+const SETTINGS_KEY = 'glowframe_settings';
+function loadSettings(): SharedSettings {
+  try {
+    return JSON.parse(localStorage.getItem(SETTINGS_KEY) ?? '{}') as SharedSettings;
+  } catch {
+    return {};
+  }
+}
+const settings: SharedSettings = loadSettings();
+function saveSettings() {
+  localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+}
+
+/** Applies the shared overrides (glow, speed) on top of a scene. */
+function withOverrides(scene: Scene): Scene {
+  return {
+    ...scene,
+    edge: { ...scene.edge, intensity: settings.glow ?? scene.edge.intensity },
+    mode: {
+      ...scene.mode,
+      params: { ...scene.mode.params, speed: settings.speed ?? scene.mode.params['speed'] },
+    },
+  };
+}
+
+/**
+ * Both screens share localStorage. If a window missed a tray event (e.g. its webview was throttled
+ * while another desktop was active), it catches up from the saved shared settings instead.
+ */
+function syncFromStorage() {
+  const stored = loadSettings();
+  if (
+    stored.presetId === settings.presetId &&
+    stored.glow === settings.glow &&
+    stored.speed === settings.speed
+  ) {
+    return;
+  }
+  settings.presetId = stored.presetId;
+  settings.glow = stored.glow;
+  settings.speed = stored.speed;
+  const target = stored.presetId ? PRESET_SCENES[stored.presetId] : undefined;
+  void applyScene(target ?? baseScene);
+}
+window.addEventListener('storage', (e) => {
+  if (e.key === SETTINGS_KEY) syncFromStorage();
+});
+setInterval(syncFromStorage, 1000);
+
+/** Single path for every scene change: shape/glow/speed shared, palette stays per-screen. */
+function applyScene(scene: Scene): boolean {
+  hostLog('info', `applyScene ${scene.meta.id}`);
+  const prevBase = baseScene;
+  const prevCurrent = currentScene;
+  try {
+    baseScene = scene;
+    currentScene = withOverrides(scene);
+    renderer.setScene(currentScene); // builds the shape first: invalid art throws before any change
+    renderer.setActivePalette(storedPaletteIndex());
+    scheduleSnapshot();
+    return true;
+  } catch (err) {
+    baseScene = prevBase;
+    currentScene = prevCurrent;
+    console.error('[Glowframe] Could not apply scene:', err);
+    return false;
+  }
+}
+
+// Publish a still of the current wallpaper so the Super/Activities overview and the desktop
+// background (when the live window is hidden) show the glowing logo instead of a black screen.
+let snapshotTimer: ReturnType<typeof setTimeout> | undefined;
+function scheduleSnapshot() {
+  if (monitorIndex !== 0) return;
+  clearTimeout(snapshotTimer);
+  snapshotTimer = setTimeout(() => {
+    try {
+      renderer.renderFrame(4000);
+      canvas.toBlob((blob) => {
+        if (!blob) return;
+        void blob.arrayBuffer().then((buf) =>
+          invoke('save_snapshot', new Uint8Array(buf), { headers: { monitor: String(monitorIndex) } }),
+        ).catch(() => {});
+      }, 'image/png');
+    } catch {
+      // Snapshot is best-effort; never disturb the live wallpaper.
+    }
+  }, 1500);
+}
+
+const startScene = settings.presetId ? PRESET_SCENES[settings.presetId] : undefined;
+applyScene(startScene ?? currentScene);
 
 // Fallback local pointer events for development / interactive window mode
 canvas.addEventListener('pointermove', (e) => {
@@ -126,6 +237,11 @@ const handlePointerLeave = (monitor?: number) => {
   }
 };
 
+// Treat a pointer that stopped reporting movement as gone (see HostInput.checkStale).
+setInterval(() => {
+  hostInput.checkStale(performance.now());
+}, 500);
+
 // Top-level Tauri IPC listeners
 listen<CursorEventPayload>('glowframe://cursor-move', (event) => {
   handlePointerMove(event.payload.x, event.payload.y, event.payload.monitor);
@@ -141,9 +257,45 @@ listen<LeaveEventPayload>('glowframe://cursor-leave', (event) => {
   handlePointerLeave(event.payload.monitor);
 }).catch(() => {});
 
+let externallyPaused = false;
 listen<{ paused: boolean }>('glowframe://set-paused', (event) => {
-  renderer.setPaused(event.payload.paused);
+  externallyPaused = event.payload.paused;
+  renderer.setPaused(externallyPaused);
 }).catch(() => {});
+
+// --- Never let the wallpaper stay frozen ---------------------------------------------------------
+// Workspace switches, GPU hiccups and compositor hide/show can stop the animation loop. Resume as
+// soon as the page is visible again, and restart the loop if frames stop advancing.
+function resumeRendering() {
+  hostInput.emitVisibilityChange(document.visibilityState === 'visible');
+  renderer.setPaused(externallyPaused);
+}
+document.addEventListener('visibilitychange', resumeRendering);
+window.addEventListener('focus', resumeRendering);
+window.addEventListener('pageshow', resumeRendering);
+
+let lastSeenTime = -1;
+let stalledChecks = 0;
+setInterval(() => {
+  if (externallyPaused || document.visibilityState !== 'visible') {
+    stalledChecks = 0;
+    return;
+  }
+  const t = renderer.getUniformValues().u_time;
+  if (t === lastSeenTime) {
+    stalledChecks++;
+    if (stalledChecks >= 2) {
+      renderer.stop();
+      renderer.start();
+      renderer.setPaused(false);
+      hostInput.emitVisibilityChange(true);
+      stalledChecks = 0;
+    }
+  } else {
+    stalledChecks = 0;
+  }
+  lastSeenTime = t;
+}, 1500);
 
 listen<{ fps: number }>('glowframe://set-fps-cap', (event) => {
   renderer.setFpsCap(event.payload.fps);
@@ -154,40 +306,45 @@ listen<{ scale: number }>('glowframe://set-resolution-scale', (event) => {
 }).catch(() => {});
 
 listen<{ intensity: number }>('glowframe://set-glow-intensity', (event) => {
-  currentScene = {
-    ...currentScene,
-    edge: {
-      ...currentScene.edge,
-      intensity: event.payload.intensity,
-    },
-  };
-  renderer.setScene(currentScene);
+  settings.glow = event.payload.intensity;
+  saveSettings();
+  applyScene(baseScene);
 }).catch(() => {});
 
 listen<{ speed: number }>('glowframe://set-rotation-speed', (event) => {
-  currentScene = {
-    ...currentScene,
-    mode: {
-      ...currentScene.mode,
-      params: {
-        ...currentScene.mode.params,
-        speed: event.payload.speed,
-      },
+  settings.speed = event.payload.speed;
+  saveSettings();
+  applyScene(baseScene);
+}).catch(() => {});
+
+listen<{ svg: string }>('glowframe://load-custom-svg', (event) => {
+  const next = parseScene({
+    ...baseScene,
+    meta: { ...baseScene.meta, id: 'custom-svg', name: 'Custom SVG', tags: ['custom'] },
+    shape: {
+      type: 'svg-file',
+      asset: event.payload.svg,
+      fillHoles: false,
+      position: baseScene.shape.position,
+      scale: baseScene.shape.scale,
+      rotation: 0,
     },
-  };
-  renderer.setScene(currentScene);
+    edge: { ...baseScene.edge, colorFlow: 'surface' },
+  });
+  if (applyScene(next)) {
+    settings.presetId = undefined; // custom art is not a named preset
+    saveSettings();
+  }
 }).catch(() => {});
 
 listen<{ presetId?: string; sceneData?: unknown }>('glowframe://set-scene', (event) => {
   if (event.payload.presetId && PRESET_SCENES[event.payload.presetId]) {
-    const nextScene = PRESET_SCENES[event.payload.presetId];
-    if (nextScene) {
-      currentScene = nextScene;
-      renderer.setScene(currentScene);
+    const next = PRESET_SCENES[event.payload.presetId];
+    if (next && applyScene(next)) {
+      settings.presetId = event.payload.presetId;
+      saveSettings();
     }
   } else if (event.payload.sceneData) {
-    currentScene = parseScene(event.payload.sceneData);
-    renderer.setScene(currentScene);
+    applyScene(parseScene(event.payload.sceneData));
   }
 }).catch(() => {});
-

@@ -1,9 +1,48 @@
+pub mod background;
 pub mod linux_host;
 mod tray;
 pub mod windows_host;
 
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
+
+/// Receives a PNG snapshot of the live scene from a wallpaper webview (raw binary body) and
+/// publishes it as the desktop background so the Super/Activities overview is not black.
+#[tauri::command]
+fn save_snapshot(request: tauri::ipc::Request<'_>) -> Result<(), String> {
+    let monitor = request
+        .headers()
+        .get("monitor")
+        .and_then(|v| v.to_str().ok())
+        .and_then(|v| v.parse::<usize>().ok())
+        .unwrap_or(0);
+    if monitor != 0 {
+        return Ok(()); // GNOME uses a single background image: monitor 0 is canonical.
+    }
+    match request.body() {
+        tauri::ipc::InvokeBody::Raw(bytes) => {
+            background::publish_snapshot(bytes).map_err(|e| e.to_string())
+        }
+        _ => Err("expected raw PNG bytes".to_string()),
+    }
+}
+
+/// Appends a line from a wallpaper webview to ~/.config/glowframe/glowframe.log.
+#[tauri::command]
+fn log_line(line: String) {
+    use std::io::Write;
+    let home = std::env::var("HOME").unwrap_or_else(|_| ".".to_string());
+    let dir = std::path::PathBuf::from(home).join(".config").join("glowframe");
+    let _ = std::fs::create_dir_all(&dir);
+    let path = dir.join("glowframe.log");
+    // Keep the log small: start over once it grows past 512 KB.
+    if std::fs::metadata(&path).map(|m| m.len() > 512 * 1024).unwrap_or(false) {
+        let _ = std::fs::remove_file(&path);
+    }
+    if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open(path) {
+        let _ = writeln!(f, "{}", line);
+    }
+}
 
 pub fn run() {
     #[cfg(target_os = "linux")]
@@ -16,7 +55,10 @@ pub fn run() {
     let stop_signal = Arc::new(AtomicBool::new(false));
     let stop_signal_clone = stop_signal.clone();
 
+    let exit_stop_signal = stop_signal.clone();
+
     tauri::Builder::default()
+        .invoke_handler(tauri::generate_handler![save_snapshot, log_line])
         .setup(move |app| {
             let handle = app.handle();
             let _ = tray::create_tray(handle);
@@ -24,6 +66,15 @@ pub fn run() {
             #[cfg(target_os = "linux")]
             {
                 linux_host::sync_gnome_background();
+
+                // Quit cleanly on SIGINT/SIGTERM so the original wallpaper is restored.
+                for sig in [2, 15] {
+                    let h = handle.clone();
+                    glib::unix_signal_add(sig, move || {
+                        h.exit(0);
+                        glib::ControlFlow::Break
+                    });
+                }
             }
 
             let available_monitors = app.available_monitors().unwrap_or_default();
@@ -49,7 +100,7 @@ pub fn run() {
                 let win_res = tauri::WebviewWindowBuilder::new(app, &label, url)
                     .title(format!("Glowframe Wallpaper {}", i))
                     .decorations(false)
-                    .transparent(true)
+                    .transparent(false)
                     .always_on_bottom(true)
                     .skip_taskbar(true)
                     .resizable(false)
@@ -103,6 +154,12 @@ pub fn run() {
 
             Ok(())
         })
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application")
+        .run(move |_app, event| {
+            if let tauri::RunEvent::Exit = event {
+                exit_stop_signal.store(true, std::sync::atomic::Ordering::Relaxed);
+                background::restore_original();
+            }
+        });
 }

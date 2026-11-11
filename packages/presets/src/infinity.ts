@@ -31,6 +31,7 @@ export const infinityScene: Scene = parseScene({
     type: 'svg-path',
     d: INFINITY_SVG_PATH,
     viewBox: [0, 0, 100, 100],
+    closeGaps: 0,
     position: [0.5, 0.52],
     scale: 0.34,
     rotation: 0,

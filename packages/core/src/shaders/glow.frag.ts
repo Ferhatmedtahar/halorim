@@ -10,7 +10,8 @@ uniform vec2 u_shapePos;          // Shape center [0..1]
 uniform float u_shapeScale;       // Normalized shape scale
 uniform float u_shapeRotation;    // Radians
 uniform int u_shapeType;          // 0 = EDT texture, 1 = analytic triangle, 2 = analytic circle, 3 = analytic hexagon
-uniform float u_maxDistance;      // Normalized max distance factor
+uniform float u_maxDistance;      // (legacy) unused: the SDF texture is R16F in grid units
+uniform int u_colorFlow;          // 0 = radial (angle around center), 1 = surface (position on outline)
 uniform float u_edgeWidth;        // Rim core width
 uniform float u_edgeFalloff;      // Glow exponential falloff
 uniform float u_edgeIntensity;    // Glow intensity multiplier
@@ -79,6 +80,33 @@ float sdHexagon(vec2 p, float r) {
   return length(p) * sign(p.y);
 }
 
+// Maps a screen UV (0..1) into aspect-corrected, rotated, scaled shape space (grid units).
+vec2 toLocal(vec2 uv, float aspect, float safeScale) {
+  vec2 df = uv - u_shapePos;
+  df.x *= aspect;
+  float cr = cos(-u_shapeRotation);
+  float sr = sin(-u_shapeRotation);
+  vec2 rot = vec2(df.x * cr - df.y * sr, df.x * sr + df.y * cr);
+  return rot / safeScale;
+}
+
+// Cursor-facing brightness. Radial flow: angular lobe around the center (original look).
+// Surface flow: the outline brightens where its normal faces the cursor, attenuated by distance.
+float cursorBeamAt(float angle, vec2 bp, vec2 nrm, vec2 cLocal) {
+  if (u_colorFlow == 1) {
+    vec2 toC = cLocal - bp;
+    float dc = length(toC);
+    vec2 dirC = dc > 0.0001 ? toC / dc : vec2(0.0);
+    float facing = pow(max(dot(nrm, dirC), 0.0), max(u_cursorSharpness, 1.0));
+    return facing * (0.35 + 0.65 * exp(-dc * 0.9));
+  }
+  float angleDiff = abs(angle - u_lightAngle);
+  if (angleDiff > 3.14159265) angleDiff = 6.2831853 - angleDiff;
+  return pow(max(cos(angleDiff), 0.0), 3.0);
+}
+
+float dLocalForGap(float d, float safeScale) { return d / safeScale; }
+
 void main() {
   float aspect = u_resolution.x / max(u_resolution.y, 1.0);
 
@@ -100,6 +128,10 @@ void main() {
 
   float d = 0.0;
   vec2 shapeNormal = vec2(0.0, 1.0);
+  vec2 smoothNormal = vec2(0.0, 1.0);
+  bool haveSmooth = false;
+  float dEnvLocal = 0.0; // distance to the OUTER envelope (grid units); drives the soft glow
+  bool haveEnv = false;
 
   if (u_shapeType == 1) {
     // Analytic equilateral triangle matching canonical preset geometry (size 0.7)
@@ -132,20 +164,22 @@ void main() {
     float nLen = length(vec2(ndx, ndy));
     shapeNormal = nLen > 0.00001 ? vec2(ndx, ndy) / nLen : vec2(0.0, 1.0);
   } else {
-    // High-fidelity EDT distance field for arbitrary SVG paths or text.
-    // Radial boundary projection eliminates square/rectangular texture-box artifacts completely!
+    // Exact distance field (R16F, signed distance in units of the texture grid).
+    // Beyond the projection circle the field is extended radially so glow stays round and smooth.
     float r = length(p);
-    const float rMax = 0.44;
-    vec2 pSample = (r > rMax && r > 0.00001) ? (p / r) * rMax : p;
+    const float rMax = 0.49;
+    vec2 pSample = (r > rMax) ? p * (rMax / r) : p;
     vec2 sampleUv = pSample + vec2(0.5);
 
-    float rawSdf = texture(u_sdf, sampleUv).r;
-    float distPixels = (rawSdf - 0.5) * 2.0 * u_maxDistance;
-    float extraPixels = max(r - rMax, 0.0) * 1024.0;
-    float totalPixels = distPixels + extraPixels;
-    d = (totalPixels / 1024.0) * safeScale;
+    // R = exact distance to the true artwork, G = distance to its outer envelope (gaps, holes and
+    // notches sealed). The artwork edge keeps a crisp line; only the envelope radiates soft glow.
+    vec2 samp = texture(u_sdf, sampleUv).rg;
+    float extra = max(r - rMax, 0.0);
+    float dLocal = samp.r + extra;
+    dEnvLocal = samp.g + extra;
+    haveEnv = true;
+    d = dLocal * safeScale;
 
-    // Normal calculation via EDT central differences
     float eps = 1.0 / 1024.0;
     float dR = texture(u_sdf, sampleUv + vec2(eps, 0.0)).r;
     float dL = texture(u_sdf, sampleUv - vec2(eps, 0.0)).r;
@@ -153,15 +187,60 @@ void main() {
     float dD = texture(u_sdf, sampleUv - vec2(0.0, eps)).r;
     vec2 grad = vec2(dR - dL, dU - dD);
     float gLen = length(grad);
-    vec2 edtNormal = gLen > 0.00001 ? grad / gLen : (r > 0.00001 ? p / r : vec2(0.0, 1.0));
     vec2 radialNormal = r > 0.00001 ? p / r : vec2(0.0, 1.0);
-    float radialBlend = smoothstep(rMax * 0.75, rMax, r);
-    shapeNormal = normalize(mix(edtNormal, radialNormal, radialBlend));
+    vec2 edtNormal = gLen > 0.00001 ? grad / gLen : radialNormal;
+    // Wide-support gradient: stable direction for color and cursor light (no ray streaks from
+    // tiny concavities in the outline).
+    float we = 10.0 / 1024.0;
+    vec2 wgrad = vec2(
+      texture(u_sdf, sampleUv + vec2(we, 0.0)).g - texture(u_sdf, sampleUv - vec2(we, 0.0)).g,
+      texture(u_sdf, sampleUv + vec2(0.0, we)).g - texture(u_sdf, sampleUv - vec2(0.0, we)).g
+    );
+    float wLen = length(wgrad);
+    smoothNormal = wLen > 0.00001 ? wgrad / wLen : edtNormal;
+    haveSmooth = true;
+    float radialBlend = smoothstep(0.47, 0.62, r);
+    vec2 blended = mix(edtNormal, radialNormal, radialBlend);
+    float bLen = length(blended);
+    shapeNormal = bLen > 0.00001 ? blended / bLen : radialNormal;
   }
 
   // Edge perimeter angle around shape center
   float angle = (length(p) > 0.00001) ? atan(p.y, p.x) : 0.0;
-  float normAngle = fract((angle / 6.28318530718) + 0.5 + u_time * u_rotationSpeed + u_hueShift);
+
+  // Nearest outline point (local units) and cursor position in the same space.
+  // Right at the outline we use the exact nearest point and normal. As the glow spreads away from
+  // the shape we blend to the pixel position and a radial direction: the nearest outline point jumps
+  // along medial axes (between panes, limbs, rings), which would otherwise draw hard seams.
+  if (!haveEnv) dEnvLocal = d / safeScale;
+  float outsideLocal = max(dEnvLocal, 0.0);
+  float farBlend = smoothstep(0.0, 0.12, outsideLocal);
+  vec2 bpExact = p - (haveSmooth ? smoothNormal : shapeNormal) * dEnvLocal;
+  vec2 bp = mix(bpExact, p, farBlend);
+  vec2 radialDir = length(p) > 0.00001 ? normalize(p) : vec2(0.0, 1.0);
+  vec2 baseNormal = haveSmooth ? smoothNormal : shapeNormal;
+  vec2 flowNormal = mix(baseNormal, radialDir, farBlend);
+  float fnLen = length(flowNormal);
+  flowNormal = fnLen > 0.00001 ? flowNormal / fnLen : radialDir;
+  vec2 cLocal = toLocal(u_cursorPos, aspect, safeScale);
+
+  float normAngle;
+  float posAngle;
+  if (u_colorFlow == 1) {
+    // Surface flow: color is a function of WHERE on the outline you are, not of the angle around
+    // the shape center. Every pane/limb/ring of a logo carries its own continuous gradient and
+    // nothing converges to a single point.
+    float qLen = length(bp);
+    vec2 qf = qLen > 0.42 ? bp * (0.42 / qLen) : bp; // never repeat the palette outside the shape
+    float spin = u_time * u_rotationSpeed * 6.28318530718;
+    vec2 dirSpin = vec2(cos(spin), sin(spin));
+    float nAng = atan(flowNormal.y, flowNormal.x);
+    normAngle = fract(dot(qf, dirSpin) * 1.45 + 0.5 + u_hueShift + 0.10 * nAng / 6.28318530718);
+    posAngle = fract(dot(qf, vec2(0.6, 0.8)) * 1.45 + 0.5);
+  } else {
+    normAngle = fract((angle / 6.28318530718) + 0.5 + u_time * u_rotationSpeed + u_hueShift);
+    posAngle = fract((angle / 6.28318530718) + 0.5);
+  }
 
   // Chromatic dispersion for prism effect
   float disp = u_edgeDispersion * 0.035;
@@ -174,7 +253,6 @@ void main() {
   float perimeterLight = 1.0;
   if (u_rotationSpeed > 0.001) {
     // 3 harmonic traveling wave bands inspired by Vercel LINE_VELOCITIES [-3.302, -2.355, -1.636]
-    float posAngle = fract((angle / 6.28318530718) + 0.5);
     float s = u_rotationSpeed;
     float t = u_time;
 
@@ -205,16 +283,12 @@ void main() {
     float idleLight = mix(0.10, 0.85, multiBand);
 
     // Hover beam focusing toward cursor
-    float angleDiff = abs(angle - u_lightAngle);
-    if (angleDiff > 3.14159265) angleDiff = 6.2831853 - angleDiff;
-    float cursorBeam = pow(max(cos(angleDiff), 0.0), 3.0);
+    float cursorBeam = cursorBeamAt(angle, bp, flowNormal, cLocal);
     float activeCursorLight = mix(0.10, 0.90, cursorBeam);
 
     perimeterLight = mix(idleLight, activeCursorLight, u_hoverTransition);
   } else if (u_hoverTransition > 0.001) {
-    float angleDiff = abs(angle - u_lightAngle);
-    if (angleDiff > 3.14159265) angleDiff = 6.2831853 - angleDiff;
-    float cursorBeam = pow(max(cos(angleDiff), 0.0), 3.0);
+    float cursorBeam = cursorBeamAt(angle, bp, flowNormal, cLocal);
     perimeterLight = mix(0.12, 1.0, cursorBeam);
   }
 
@@ -242,17 +316,25 @@ void main() {
   // --- Pure Vercel Edge Falloff & Space Expansion ---
   // 1. Razor-sharp core line
   float core = smoothstep(u_edgeWidth, 0.0, abs(d));
-  // 2. Near-band falloff
+  // 2. Soft glow is measured from the OUTER envelope, never from empty space inside the artwork.
+  float dg = max(dEnvLocal * safeScale, 0.0);
   float nearOuter = max(u_edgeFalloff, 0.018);
-  float nearFade = clamp(1.0 - max(d, 0.0) / nearOuter, 0.0, 1.0);
+  float nearFade = clamp(1.0 - dg / nearOuter, 0.0, 1.0);
   float nearBand = pow(nearFade, 2.8);
   // 3. Two-stage exponential far radiance expanding naturally into the black void
-  float farStage1 = exp(-max(d, 0.0) * 13.0) * 0.35;
-  float farStage2 = exp(-max(d, 0.0) * 3.8) * 0.14;
+  float farStage1 = exp(-dg * 13.0) * 0.35;
+  float farStage2 = exp(-dg * 3.8) * 0.14;
   float farGlow = farStage1 + farStage2;
 
-  // Calibrated rim profile: never clips/blows out into washed-out white
-  float rimProfile = (nearBand * 0.45 + core * 0.55 + farGlow) * u_edgeIntensity * edgeLight;
+  // Soft glow is zero in gaps/holes (inside the envelope but outside the artwork) and fades where
+  // the nearest real edge is much farther away than the envelope (sealed notches), so no plasma
+  // appears in or around the empty spaces of a logo. The thin edge line always stays.
+  float gapDepth = max(dLocalForGap(d, safeScale) - dEnvLocal, 0.0);
+  float sealed = 1.0 - smoothstep(0.03, 0.14, gapDepth);
+  float inGap = smoothstep(-0.003, -0.008, dEnvLocal);
+  float softGlow = (nearBand * 0.45 + farGlow) * sealed * (1.0 - inGap);
+  float rimLine = core * 0.55;
+  float rimProfile = (softGlow + rimLine) * u_edgeIntensity * edgeLight;
 
   // Inside vs outside composition
   vec3 linearColor;

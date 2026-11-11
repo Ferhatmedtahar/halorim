@@ -4,37 +4,28 @@ import { cva, type VariantProps } from 'class-variance-authority';
 import { cn } from '@/lib/utils';
 
 const buttonVariants = cva(
-  'inline-flex items-center justify-center whitespace-nowrap text-xs font-mono font-medium transition-all focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-terminal-cyan disabled:pointer-events-none disabled:opacity-50 select-none uppercase tracking-wider',
+  'inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-full font-medium transition-[background-color,color,opacity,transform] duration-fast ease-out active:scale-[0.98] disabled:pointer-events-none disabled:opacity-40 select-none',
   {
     variants: {
       variant: {
-        default:
-          'bg-terminal-cyan text-black hover:bg-terminal-cyan/90 border border-terminal-cyan shadow-terminal-glow font-semibold',
-        terminal:
-          'bg-terminal-card text-terminal-cyan border border-terminal-border hover:border-terminal-cyan hover:bg-terminal-cyan/10 hover:shadow-terminal-glow',
-        cyber:
-          'bg-emerald-500/10 text-terminal-green border border-emerald-500/30 hover:border-terminal-green hover:bg-emerald-500/20 hover:shadow-terminal-green',
-        amber:
-          'bg-amber-500/10 text-terminal-amber border border-amber-500/30 hover:border-terminal-amber hover:bg-amber-500/20 hover:shadow-terminal-amber',
-        outline:
-          'border border-terminal-border text-terminal-text bg-transparent hover:border-slate-400 hover:text-white',
-        ghost:
-          'text-terminal-dim hover:text-terminal-text hover:bg-terminal-border/20 border border-transparent',
-        destructive:
-          'bg-terminal-pink/10 text-terminal-pink border border-terminal-pink/30 hover:bg-terminal-pink/20',
+        // Off-white fill, dark text. The one loud thing in the chrome.
+        default: 'bg-fg text-bg hover:bg-white',
+        // Muted grey fill, no outline.
+        secondary: 'bg-hover text-fg hover:bg-line',
+        ghost: 'text-muted hover:text-fg hover:bg-raised',
       },
       size: {
-        default: 'h-9 px-4 py-2',
-        sm: 'h-7 px-3 text-[11px]',
-        lg: 'h-11 px-6 text-sm',
-        icon: 'h-9 w-9',
+        default: 'h-10 px-4 text-sm',
+        sm: 'h-8 px-3 text-[13px]',
+        lg: 'h-12 px-6 text-base',
+        icon: 'h-10 w-10',
       },
     },
     defaultVariants: {
       variant: 'default',
       size: 'default',
     },
-  }
+  },
 );
 
 export interface ButtonProps
@@ -46,14 +37,8 @@ export interface ButtonProps
 const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
   ({ className, variant, size, asChild = false, ...props }, ref) => {
     const Comp = asChild ? Slot : 'button';
-    return (
-      <Comp
-        className={cn(buttonVariants({ variant, size, className }))}
-        ref={ref}
-        {...props}
-      />
-    );
-  }
+    return <Comp className={cn(buttonVariants({ variant, size, className }))} ref={ref} {...props} />;
+  },
 );
 Button.displayName = 'Button';
 

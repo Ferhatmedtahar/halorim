@@ -14,7 +14,7 @@ struct CustomSvgPayload {
 #[derive(Clone, Serialize)]
 struct ScenePayload {
     #[serde(rename = "presetId")]
-    preset_id: &'static str,
+    preset_id: String,
 }
 
 #[derive(Clone, Serialize)]
@@ -43,39 +43,55 @@ struct SpeedPayload {
 }
 
 pub fn create_tray(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
-    // 1. Presets Submenu
-    let preset_triangle = MenuItem::with_id(app, "preset_triangle", "Triangle Prism", true, None::<&str>)?;
-    let preset_tux = MenuItem::with_id(app, "preset_tux", "Tux Linux Mascot", true, None::<&str>)?;
-    let preset_arch = MenuItem::with_id(app, "preset_arch", "Arch Linux Apex", true, None::<&str>)?;
-    let preset_debian = MenuItem::with_id(app, "preset_debian", "Debian Swirl", true, None::<&str>)?;
-    let preset_infinity = MenuItem::with_id(app, "preset_infinity", "Infinity Loop", true, None::<&str>)?;
-    let preset_diamond = MenuItem::with_id(app, "preset_diamond", "Diamond Facet", true, None::<&str>)?;
-    let preset_hypercube = MenuItem::with_id(app, "preset_hypercube", "Tesseract Hypercube", true, None::<&str>)?;
-    let preset_phantom = MenuItem::with_id(app, "preset_phantom", "Phantom Arcade", true, None::<&str>)?;
-    let preset_fourpane = MenuItem::with_id(app, "preset_fourpane", "Four-Pane", true, None::<&str>)?;
-    let preset_hexagon = MenuItem::with_id(app, "preset_hexagon", "Hexagon Prism", true, None::<&str>)?;
-    let preset_cyber = MenuItem::with_id(app, "preset_cyber", "Cyber Star", true, None::<&str>)?;
-    let preset_matrix = MenuItem::with_id(app, "preset_matrix", "Matrix Circle", true, None::<&str>)?;
-
-    let presets_menu = Submenu::with_items(
-        app,
-        "Presets",
-        true,
-        &[
-            &preset_triangle,
-            &preset_tux,
-            &preset_arch,
-            &preset_debian,
-            &preset_infinity,
-            &preset_diamond,
-            &preset_hypercube,
-            &preset_phantom,
-            &preset_fourpane,
-            &preset_hexagon,
-            &preset_cyber,
-            &preset_matrix,
-        ],
-    )?;
+    // 1. Presets submenus (data-driven; ids match @glowframe/presets)
+    const OS_PRESETS: &[(&str, &str)] = &[
+        ("windows-11", "Windows 11"),
+        ("windows-10", "Windows 10"),
+        ("macos-apple", "macOS"),
+    ];
+    const DISTRO_PRESETS: &[(&str, &str)] = &[
+        ("ubuntu", "Ubuntu"),
+        ("tux-prism", "Tux (Linux)"),
+        ("arch-prism", "Arch Linux"),
+        ("kali", "Kali Linux"),
+        ("debian-swirl", "Debian"),
+        ("fedora", "Fedora"),
+        ("linux-mint", "Linux Mint"),
+        ("manjaro", "Manjaro"),
+        ("opensuse", "openSUSE"),
+        ("nixos", "NixOS"),
+        ("pop-os", "Pop!_OS"),
+        ("gentoo", "Gentoo"),
+        ("red-hat", "Red Hat"),
+        ("centos", "CentOS"),
+        ("alpine", "Alpine Linux"),
+        ("elementary", "elementary OS"),
+        ("zorin", "Zorin OS"),
+        ("void-linux", "Void Linux"),
+        ("endeavouros", "EndeavourOS"),
+        ("mx-linux", "MX Linux"),
+        ("rocky-linux", "Rocky Linux"),
+        ("garuda", "Garuda Linux"),
+        ("parrot", "Parrot OS"),
+        ("artix", "Artix Linux"),
+    ];
+    const SHAPE_PRESETS: &[(&str, &str)] = &[
+        ("triangle-prism", "Triangle Prism"),
+        ("infinity-loop", "Infinity Loop"),
+        ("retro-ghost", "Phantom Arcade"),
+    ];
+    let build_submenu = |title: &str, list: &[(&str, &str)]| -> Result<Submenu<tauri::Wry>, Box<dyn std::error::Error>> {
+        let items: Vec<MenuItem<tauri::Wry>> = list
+            .iter()
+            .map(|(id, label)| MenuItem::with_id(app, format!("preset:{}", id), *label, true, None::<&str>))
+            .collect::<Result<_, _>>()?;
+        let refs: Vec<&dyn tauri::menu::IsMenuItem<tauri::Wry>> =
+            items.iter().map(|i| i as &dyn tauri::menu::IsMenuItem<tauri::Wry>).collect();
+        Ok(Submenu::with_items(app, title, true, &refs)?)
+    };
+    let shapes_menu = build_submenu("Shapes", SHAPE_PRESETS)?;
+    let os_menu = build_submenu("Operating Systems", OS_PRESETS)?;
+    let distro_menu = build_submenu("Linux Distros", DISTRO_PRESETS)?;
 
     // 2. Glow Intensity Submenu
     let glow_subtle = MenuItem::with_id(app, "glow_subtle", "Subtle Glow (0.75x)", true, None::<&str>)?;
@@ -132,7 +148,9 @@ pub fn create_tray(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
     let root_menu = Menu::with_items(
         app,
         &[
-            &presets_menu,
+            &os_menu,
+            &distro_menu,
+            &shapes_menu,
             &glow_menu,
             &speed_menu,
             &fps_menu,
@@ -157,41 +175,11 @@ pub fn create_tray(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
         .on_menu_event(move |app_handle, event| {
             let id = event.id.as_ref();
             match id {
-                "preset_triangle" => {
-                    let _ = app_handle.emit("glowframe://set-scene", ScenePayload { preset_id: "triangle-prism" });
-                }
-                "preset_tux" => {
-                    let _ = app_handle.emit("glowframe://set-scene", ScenePayload { preset_id: "tux-prism" });
-                }
-                "preset_arch" => {
-                    let _ = app_handle.emit("glowframe://set-scene", ScenePayload { preset_id: "arch-prism" });
-                }
-                "preset_debian" => {
-                    let _ = app_handle.emit("glowframe://set-scene", ScenePayload { preset_id: "debian-swirl" });
-                }
-                "preset_infinity" => {
-                    let _ = app_handle.emit("glowframe://set-scene", ScenePayload { preset_id: "infinity-loop" });
-                }
-                "preset_diamond" => {
-                    let _ = app_handle.emit("glowframe://set-scene", ScenePayload { preset_id: "diamond-prism" });
-                }
-                "preset_hypercube" => {
-                    let _ = app_handle.emit("glowframe://set-scene", ScenePayload { preset_id: "hypercube" });
-                }
-                "preset_phantom" => {
-                    let _ = app_handle.emit("glowframe://set-scene", ScenePayload { preset_id: "retro-ghost" });
-                }
-                "preset_fourpane" => {
-                    let _ = app_handle.emit("glowframe://set-scene", ScenePayload { preset_id: "four-pane" });
-                }
-                "preset_hexagon" => {
-                    let _ = app_handle.emit("glowframe://set-scene", ScenePayload { preset_id: "hexagon-prism" });
-                }
-                "preset_cyber" => {
-                    let _ = app_handle.emit("glowframe://set-scene", ScenePayload { preset_id: "cyber-star" });
-                }
-                "preset_matrix" => {
-                    let _ = app_handle.emit("glowframe://set-scene", ScenePayload { preset_id: "matrix-circle" });
+                preset if preset.starts_with("preset:") => {
+                    let _ = app_handle.emit(
+                        "glowframe://set-scene",
+                        ScenePayload { preset_id: preset["preset:".len()..].to_string() },
+                    );
                 }
                 "glow_subtle" => {
                     let _ = app_handle.emit("glowframe://set-glow-intensity", GlowPayload { intensity: 0.75 });
@@ -251,7 +239,7 @@ pub fn create_tray(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
                             .pick_file()
                             .await;
                         if let Some(file) = picked {
-                            match tokio::fs::read_to_string(file.path()).await {
+                            match std::fs::read_to_string(file.path()) {
                                 Ok(svg_text) => {
                                     let _ = handle.emit(
                                         "glowframe://load-custom-svg",

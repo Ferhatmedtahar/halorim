@@ -20,6 +20,16 @@ export {
   type ShapePipelineResult,
 } from './shape/pipeline.js';
 export { computeSdf, type SdfData } from './shape/edt.js';
+export {
+  flattenPath,
+  flattenPathAdaptive,
+  parseSvgDocument,
+  buildVectorSdf,
+  fitGroupsToGrid,
+  fillMaskFromGroups,
+  type VectorGroup,
+  type SvgShapeItem,
+} from './shape/vector.js';
 export { computeSdfAsync } from './shape/worker.js';
 export {
   rasterizeShape,

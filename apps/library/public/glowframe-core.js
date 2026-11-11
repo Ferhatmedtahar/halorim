@@ -1337,10 +1337,10 @@ var ZodString = class _ZodString extends ZodType {
       ...errorUtil.errToObj(message)
     });
   }
-  length(len, message) {
+  length(len2, message) {
     return this._addCheck({
       kind: "length",
-      value: len,
+      value: len2,
       ...errorUtil.errToObj(message)
     });
   }
@@ -2204,10 +2204,10 @@ var ZodArray = class _ZodArray extends ZodType {
       maxLength: { value: maxLength, message: errorUtil.toString(message) }
     });
   }
-  length(len, message) {
+  length(len2, message) {
     return new _ZodArray({
       ...this._def,
-      exactLength: { value: len, message: errorUtil.toString(message) }
+      exactLength: { value: len2, message: errorUtil.toString(message) }
     });
   }
   nonempty(message) {
@@ -4111,6 +4111,12 @@ var PresetShapeSchema = z.object({
 var SvgPathShapeSchema = z.object({
   type: z.literal("svg-path"),
   d: z.string().min(1).describe("SVG path data string (d attribute)"),
+  fillHoles: z.boolean().optional().describe(
+    "Treat the artwork as a solid silhouette: interior details (eyes, belly, counters enclosed by the outline) are filled and get no rim light. Only the outer outline glows."
+  ),
+  closeGaps: z.number().min(0).max(200).optional().describe(
+    "Closing radius in texture pixels (1024 grid). Gaps and notches narrower than twice this value are sealed, so the glow follows the outer envelope instead of lighting empty space inside the artwork."
+  ),
   viewBox: z.tuple([
     z.number().describe("viewBox min-x"),
     z.number().describe("viewBox min-y"),
@@ -4122,6 +4128,12 @@ var SvgPathShapeSchema = z.object({
 var SvgFileShapeSchema = z.object({
   type: z.literal("svg-file"),
   asset: z.string().min(1).describe("Relative path or asset identifier for the SVG file"),
+  closeGaps: z.number().min(0).max(200).optional().describe(
+    "Closing radius in texture pixels (1024 grid). Gaps and notches narrower than twice this value are sealed, so the glow follows the outer envelope instead of lighting empty space inside the artwork."
+  ),
+  fillHoles: z.boolean().optional().describe(
+    "Treat the artwork as a solid silhouette: interior details (eyes, belly, counters enclosed by the outline) are filled and get no rim light. Only the outer outline glows."
+  ),
   viewBox: z.tuple([z.number(), z.number(), z.number().positive(), z.number().positive()]).optional().describe("Optional explicit viewBox override"),
   ...BaseShapeProps
 }).describe("Vector shape loaded from an SVG file");
@@ -4170,7 +4182,10 @@ var EdgeSchema = z.object({
   width: z.number().min(1e-4).max(0.05).default(4e-3).describe("Core rim line width in normalized units"),
   falloff: z.number().min(1e-3).max(0.5).default(0.09).describe("Glow exponential falloff distance"),
   intensity: z.number().min(0).max(5).default(1).describe("Overall glow brightness multiplier"),
-  dispersion: z.number().min(0).max(2).default(0.35).describe("Prism dispersion spread along the perimeter")
+  dispersion: z.number().min(0).max(2).default(0.35).describe("Prism dispersion spread along the perimeter"),
+  colorFlow: z.enum(["radial", "surface"]).default("radial").describe(
+    'How prism colors are assigned. "radial": by angle around the shape center (best for single convex shapes). "surface": by position on the shape surface, so every part of a multi-part or concave logo carries its own continuous gradient.'
+  )
 }).describe("Rim glow and light emission properties");
 var PaletteSchema = z.array(z.string().min(1)).min(2, "Each palette must contain at least 2 color stops").describe("A color palette represented as an ordered array of color strings (OKLCH recommended)");
 var PalettesSchema = z.array(PaletteSchema).min(1, "Scene must provide at least one palette").describe("List of available color palettes for cycle/transitions");
@@ -4311,7 +4326,8 @@ var exampleScene = {
     width: 4e-3,
     falloff: 0.09,
     intensity: 1,
-    dispersion: 0.35
+    dispersion: 0.35,
+    colorFlow: "radial"
   },
   palettes: [
     ["oklch(0.75 0.2 350)", "oklch(0.7 0.2 290)", "oklch(0.7 0.18 250)", "oklch(0.8 0.2 150)"],
@@ -4472,18 +4488,25 @@ function createQuadMesh(gl) {
 }
 
 // src/gl/texture.ts
-function createR8Texture(gl, width, height, data) {
+function createR16FTexture(gl, width, height, data, channels = 1) {
   const texture = gl.createTexture();
   if (!texture) {
     throw new Error("Failed to create WebGL texture");
   }
+  const upload = (w, h, d) => {
+    gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
+    if (channels === 2) {
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RG16F, w, h, 0, gl.RG, gl.FLOAT, d);
+    } else {
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.R16F, w, h, 0, gl.RED, gl.FLOAT, d);
+    }
+  };
   gl.bindTexture(gl.TEXTURE_2D, texture);
-  gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-  gl.texImage2D(gl.TEXTURE_2D, 0, gl.R8, width, height, 0, gl.RED, gl.UNSIGNED_BYTE, data);
+  upload(width, height, data);
   gl.bindTexture(gl.TEXTURE_2D, null);
   return {
     texture,
@@ -4493,8 +4516,7 @@ function createR8Texture(gl, width, height, data) {
     },
     updateData(w, h, newData) {
       gl.bindTexture(gl.TEXTURE_2D, texture);
-      gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
-      gl.texImage2D(gl.TEXTURE_2D, 0, gl.R8, w, h, 0, gl.RED, gl.UNSIGNED_BYTE, newData);
+      upload(w, h, newData);
       gl.bindTexture(gl.TEXTURE_2D, null);
     },
     dispose() {
@@ -5149,7 +5171,8 @@ uniform vec2 u_shapePos;          // Shape center [0..1]
 uniform float u_shapeScale;       // Normalized shape scale
 uniform float u_shapeRotation;    // Radians
 uniform int u_shapeType;          // 0 = EDT texture, 1 = analytic triangle, 2 = analytic circle, 3 = analytic hexagon
-uniform float u_maxDistance;      // Normalized max distance factor
+uniform float u_maxDistance;      // (legacy) unused: the SDF texture is R16F in grid units
+uniform int u_colorFlow;          // 0 = radial (angle around center), 1 = surface (position on outline)
 uniform float u_edgeWidth;        // Rim core width
 uniform float u_edgeFalloff;      // Glow exponential falloff
 uniform float u_edgeIntensity;    // Glow intensity multiplier
@@ -5218,6 +5241,33 @@ float sdHexagon(vec2 p, float r) {
   return length(p) * sign(p.y);
 }
 
+// Maps a screen UV (0..1) into aspect-corrected, rotated, scaled shape space (grid units).
+vec2 toLocal(vec2 uv, float aspect, float safeScale) {
+  vec2 df = uv - u_shapePos;
+  df.x *= aspect;
+  float cr = cos(-u_shapeRotation);
+  float sr = sin(-u_shapeRotation);
+  vec2 rot = vec2(df.x * cr - df.y * sr, df.x * sr + df.y * cr);
+  return rot / safeScale;
+}
+
+// Cursor-facing brightness. Radial flow: angular lobe around the center (original look).
+// Surface flow: the outline brightens where its normal faces the cursor, attenuated by distance.
+float cursorBeamAt(float angle, vec2 bp, vec2 nrm, vec2 cLocal) {
+  if (u_colorFlow == 1) {
+    vec2 toC = cLocal - bp;
+    float dc = length(toC);
+    vec2 dirC = dc > 0.0001 ? toC / dc : vec2(0.0);
+    float facing = pow(max(dot(nrm, dirC), 0.0), max(u_cursorSharpness, 1.0));
+    return facing * (0.35 + 0.65 * exp(-dc * 0.9));
+  }
+  float angleDiff = abs(angle - u_lightAngle);
+  if (angleDiff > 3.14159265) angleDiff = 6.2831853 - angleDiff;
+  return pow(max(cos(angleDiff), 0.0), 3.0);
+}
+
+float dLocalForGap(float d, float safeScale) { return d / safeScale; }
+
 void main() {
   float aspect = u_resolution.x / max(u_resolution.y, 1.0);
 
@@ -5239,6 +5289,10 @@ void main() {
 
   float d = 0.0;
   vec2 shapeNormal = vec2(0.0, 1.0);
+  vec2 smoothNormal = vec2(0.0, 1.0);
+  bool haveSmooth = false;
+  float dEnvLocal = 0.0; // distance to the OUTER envelope (grid units); drives the soft glow
+  bool haveEnv = false;
 
   if (u_shapeType == 1) {
     // Analytic equilateral triangle matching canonical preset geometry (size 0.7)
@@ -5271,28 +5325,83 @@ void main() {
     float nLen = length(vec2(ndx, ndy));
     shapeNormal = nLen > 0.00001 ? vec2(ndx, ndy) / nLen : vec2(0.0, 1.0);
   } else {
-    // Fallback: EDT texture for arbitrary SVG paths or text
-    vec2 clampedUv = clamp(shapeUv, vec2(0.001), vec2(0.999));
-    float rawSdf = texture(u_sdf, clampedUv).r;
-    float distPixels = (rawSdf - 0.5) * 2.0 * u_maxDistance;
-    vec2 boxDistVec = max(vec2(0.0), max(vec2(0.0) - shapeUv, shapeUv - vec2(1.0)));
-    float extraPixels = length(boxDistVec) * 1024.0;
-    float totalPixels = distPixels + extraPixels;
-    d = (totalPixels / 1024.0) * safeScale;
+    // Exact distance field (R16F, signed distance in units of the texture grid).
+    // Beyond the projection circle the field is extended radially so glow stays round and smooth.
+    float r = length(p);
+    const float rMax = 0.49;
+    vec2 pSample = (r > rMax) ? p * (rMax / r) : p;
+    vec2 sampleUv = pSample + vec2(0.5);
+
+    // R = exact distance to the true artwork, G = distance to its outer envelope (gaps, holes and
+    // notches sealed). The artwork edge keeps a crisp line; only the envelope radiates soft glow.
+    vec2 samp = texture(u_sdf, sampleUv).rg;
+    float extra = max(r - rMax, 0.0);
+    float dLocal = samp.r + extra;
+    dEnvLocal = samp.g + extra;
+    haveEnv = true;
+    d = dLocal * safeScale;
 
     float eps = 1.0 / 1024.0;
-    float dR = texture(u_sdf, clamp(shapeUv + vec2(eps, 0.0), 0.001, 0.999)).r;
-    float dL = texture(u_sdf, clamp(shapeUv - vec2(eps, 0.0), 0.001, 0.999)).r;
-    float dU = texture(u_sdf, clamp(shapeUv + vec2(0.0, eps), 0.001, 0.999)).r;
-    float dD = texture(u_sdf, clamp(shapeUv - vec2(0.0, eps), 0.001, 0.999)).r;
+    float dR = texture(u_sdf, sampleUv + vec2(eps, 0.0)).r;
+    float dL = texture(u_sdf, sampleUv - vec2(eps, 0.0)).r;
+    float dU = texture(u_sdf, sampleUv + vec2(0.0, eps)).r;
+    float dD = texture(u_sdf, sampleUv - vec2(0.0, eps)).r;
     vec2 grad = vec2(dR - dL, dU - dD);
     float gLen = length(grad);
-    shapeNormal = gLen > 0.00001 ? grad / gLen : vec2(0.0, 1.0);
+    vec2 radialNormal = r > 0.00001 ? p / r : vec2(0.0, 1.0);
+    vec2 edtNormal = gLen > 0.00001 ? grad / gLen : radialNormal;
+    // Wide-support gradient: stable direction for color and cursor light (no ray streaks from
+    // tiny concavities in the outline).
+    float we = 10.0 / 1024.0;
+    vec2 wgrad = vec2(
+      texture(u_sdf, sampleUv + vec2(we, 0.0)).g - texture(u_sdf, sampleUv - vec2(we, 0.0)).g,
+      texture(u_sdf, sampleUv + vec2(0.0, we)).g - texture(u_sdf, sampleUv - vec2(0.0, we)).g
+    );
+    float wLen = length(wgrad);
+    smoothNormal = wLen > 0.00001 ? wgrad / wLen : edtNormal;
+    haveSmooth = true;
+    float radialBlend = smoothstep(0.47, 0.62, r);
+    vec2 blended = mix(edtNormal, radialNormal, radialBlend);
+    float bLen = length(blended);
+    shapeNormal = bLen > 0.00001 ? blended / bLen : radialNormal;
   }
 
   // Edge perimeter angle around shape center
   float angle = (length(p) > 0.00001) ? atan(p.y, p.x) : 0.0;
-  float normAngle = fract((angle / 6.28318530718) + 0.5 + u_time * u_rotationSpeed + u_hueShift);
+
+  // Nearest outline point (local units) and cursor position in the same space.
+  // Right at the outline we use the exact nearest point and normal. As the glow spreads away from
+  // the shape we blend to the pixel position and a radial direction: the nearest outline point jumps
+  // along medial axes (between panes, limbs, rings), which would otherwise draw hard seams.
+  if (!haveEnv) dEnvLocal = d / safeScale;
+  float outsideLocal = max(dEnvLocal, 0.0);
+  float farBlend = smoothstep(0.0, 0.12, outsideLocal);
+  vec2 bpExact = p - (haveSmooth ? smoothNormal : shapeNormal) * dEnvLocal;
+  vec2 bp = mix(bpExact, p, farBlend);
+  vec2 radialDir = length(p) > 0.00001 ? normalize(p) : vec2(0.0, 1.0);
+  vec2 baseNormal = haveSmooth ? smoothNormal : shapeNormal;
+  vec2 flowNormal = mix(baseNormal, radialDir, farBlend);
+  float fnLen = length(flowNormal);
+  flowNormal = fnLen > 0.00001 ? flowNormal / fnLen : radialDir;
+  vec2 cLocal = toLocal(u_cursorPos, aspect, safeScale);
+
+  float normAngle;
+  float posAngle;
+  if (u_colorFlow == 1) {
+    // Surface flow: color is a function of WHERE on the outline you are, not of the angle around
+    // the shape center. Every pane/limb/ring of a logo carries its own continuous gradient and
+    // nothing converges to a single point.
+    float qLen = length(bp);
+    vec2 qf = qLen > 0.42 ? bp * (0.42 / qLen) : bp; // never repeat the palette outside the shape
+    float spin = u_time * u_rotationSpeed * 6.28318530718;
+    vec2 dirSpin = vec2(cos(spin), sin(spin));
+    float nAng = atan(flowNormal.y, flowNormal.x);
+    normAngle = fract(dot(qf, dirSpin) * 1.45 + 0.5 + u_hueShift + 0.10 * nAng / 6.28318530718);
+    posAngle = fract(dot(qf, vec2(0.6, 0.8)) * 1.45 + 0.5);
+  } else {
+    normAngle = fract((angle / 6.28318530718) + 0.5 + u_time * u_rotationSpeed + u_hueShift);
+    posAngle = fract((angle / 6.28318530718) + 0.5);
+  }
 
   // Chromatic dispersion for prism effect
   float disp = u_edgeDispersion * 0.035;
@@ -5305,7 +5414,6 @@ void main() {
   float perimeterLight = 1.0;
   if (u_rotationSpeed > 0.001) {
     // 3 harmonic traveling wave bands inspired by Vercel LINE_VELOCITIES [-3.302, -2.355, -1.636]
-    float posAngle = fract((angle / 6.28318530718) + 0.5);
     float s = u_rotationSpeed;
     float t = u_time;
 
@@ -5336,16 +5444,12 @@ void main() {
     float idleLight = mix(0.10, 0.85, multiBand);
 
     // Hover beam focusing toward cursor
-    float angleDiff = abs(angle - u_lightAngle);
-    if (angleDiff > 3.14159265) angleDiff = 6.2831853 - angleDiff;
-    float cursorBeam = pow(max(cos(angleDiff), 0.0), 3.0);
+    float cursorBeam = cursorBeamAt(angle, bp, flowNormal, cLocal);
     float activeCursorLight = mix(0.10, 0.90, cursorBeam);
 
     perimeterLight = mix(idleLight, activeCursorLight, u_hoverTransition);
   } else if (u_hoverTransition > 0.001) {
-    float angleDiff = abs(angle - u_lightAngle);
-    if (angleDiff > 3.14159265) angleDiff = 6.2831853 - angleDiff;
-    float cursorBeam = pow(max(cos(angleDiff), 0.0), 3.0);
+    float cursorBeam = cursorBeamAt(angle, bp, flowNormal, cLocal);
     perimeterLight = mix(0.12, 1.0, cursorBeam);
   }
 
@@ -5373,17 +5477,25 @@ void main() {
   // --- Pure Vercel Edge Falloff & Space Expansion ---
   // 1. Razor-sharp core line
   float core = smoothstep(u_edgeWidth, 0.0, abs(d));
-  // 2. Near-band falloff
+  // 2. Soft glow is measured from the OUTER envelope, never from empty space inside the artwork.
+  float dg = max(dEnvLocal * safeScale, 0.0);
   float nearOuter = max(u_edgeFalloff, 0.018);
-  float nearFade = clamp(1.0 - max(d, 0.0) / nearOuter, 0.0, 1.0);
+  float nearFade = clamp(1.0 - dg / nearOuter, 0.0, 1.0);
   float nearBand = pow(nearFade, 2.8);
   // 3. Two-stage exponential far radiance expanding naturally into the black void
-  float farStage1 = exp(-max(d, 0.0) * 13.0) * 0.35;
-  float farStage2 = exp(-max(d, 0.0) * 3.8) * 0.14;
+  float farStage1 = exp(-dg * 13.0) * 0.35;
+  float farStage2 = exp(-dg * 3.8) * 0.14;
   float farGlow = farStage1 + farStage2;
 
-  // Calibrated rim profile: never clips/blows out into washed-out white
-  float rimProfile = (nearBand * 0.45 + core * 0.55 + farGlow) * u_edgeIntensity * edgeLight;
+  // Soft glow is zero in gaps/holes (inside the envelope but outside the artwork) and fades where
+  // the nearest real edge is much farther away than the envelope (sealed notches), so no plasma
+  // appears in or around the empty spaces of a logo. The thin edge line always stays.
+  float gapDepth = max(dLocalForGap(d, safeScale) - dEnvLocal, 0.0);
+  float sealed = 1.0 - smoothstep(0.03, 0.14, gapDepth);
+  float inGap = smoothstep(-0.003, -0.008, dEnvLocal);
+  float softGlow = (nearBand * 0.45 + farGlow) * sealed * (1.0 - inGap);
+  float rimLine = core * 0.55;
+  float rimProfile = (softGlow + rimLine) * u_edgeIntensity * edgeLight;
 
   // Inside vs outside composition
   vec3 linearColor;
@@ -5485,6 +5597,24 @@ function edt2d(mask, width, height, featureVal, outputSquared) {
     }
   }
 }
+function distanceToFeature(mask, width, height, featureVal) {
+  const sq = new Float64Array(width * height);
+  const out = new Float32Array(width * height);
+  edt2d(mask, width, height, featureVal, sq);
+  for (let i = 0; i < out.length; i++) out[i] = Math.sqrt(sq[i]);
+  return out;
+}
+function binaryDistances(mask, width, height) {
+  const total = width * height;
+  const sq = new Float64Array(total);
+  const outDist = new Float32Array(total);
+  const inDist = new Float32Array(total);
+  edt2d(mask, width, height, 1, sq);
+  for (let i = 0; i < total; i++) outDist[i] = Math.sqrt(sq[i]);
+  edt2d(mask, width, height, 0, sq);
+  for (let i = 0; i < total; i++) inDist[i] = Math.sqrt(sq[i]);
+  return { outDist, inDist };
+}
 function computeSdf(mask, width, height, maxDistance = 64) {
   const total = width * height;
   const dOutSq = new Float64Array(total);
@@ -5492,6 +5622,7 @@ function computeSdf(mask, width, height, maxDistance = 64) {
   edt2d(mask, width, height, 1, dOutSq);
   edt2d(mask, width, height, 0, dInSq);
   const cpuDistances = new Float32Array(total);
+  const floatData = new Float32Array(total);
   const r8Data = new Uint8Array(total);
   for (let i = 0; i < total; i++) {
     const isInside = mask[i] === 1;
@@ -5502,6 +5633,7 @@ function computeSdf(mask, width, height, maxDistance = 64) {
       dist = +Math.sqrt(dOutSq[i]);
     }
     cpuDistances[i] = dist;
+    floatData[i] = dist / width;
     const norm = Math.max(0, Math.min(1, dist / maxDistance * 0.5 + 0.5));
     r8Data[i] = Math.round(norm * 255);
   }
@@ -5510,6 +5642,7 @@ function computeSdf(mask, width, height, maxDistance = 64) {
     height,
     maxDistance,
     cpuDistances,
+    floatData,
     r8Data
   };
 }
@@ -5629,11 +5762,17 @@ async function computeSdfAsync(mask, width, height, maxDistance = 96) {
         const maskCopy = new Uint8Array(mask);
         worker.onmessage = (e) => {
           worker.terminate();
+          const cpuDistances = e.data.cpuDistances;
+          const floatData = new Float32Array(cpuDistances.length);
+          for (let i = 0; i < cpuDistances.length; i++) {
+            floatData[i] = cpuDistances[i] / e.data.width;
+          }
           resolve({
             width: e.data.width,
             height: e.data.height,
             maxDistance: e.data.maxDistance,
-            cpuDistances: e.data.cpuDistances,
+            cpuDistances,
+            floatData,
             r8Data: e.data.r8Data
           });
         };
@@ -5662,40 +5801,877 @@ async function computeSdfAsync(mask, width, height, maxDistance = 96) {
   return computeSdf(mask, width, height, maxDistance);
 }
 
+// src/shape/vector.ts
+var IDENTITY = [1, 0, 0, 1, 0, 0];
+function mulMat(a, b) {
+  return [
+    a[0] * b[0] + a[2] * b[1],
+    a[1] * b[0] + a[3] * b[1],
+    a[0] * b[2] + a[2] * b[3],
+    a[1] * b[2] + a[3] * b[3],
+    a[0] * b[4] + a[2] * b[5] + a[4],
+    a[1] * b[4] + a[3] * b[5] + a[5]
+  ];
+}
+function parseTransform(value) {
+  if (!value) return IDENTITY;
+  let m = IDENTITY;
+  const re = /([a-zA-Z]+)\s*\(([^)]*)\)/g;
+  let match;
+  while ((match = re.exec(value)) !== null) {
+    const name = match[1].toLowerCase();
+    const a = match[2].split(/[\s,]+/).filter((s) => s.length > 0).map(Number);
+    if (a.some((n) => !Number.isFinite(n))) continue;
+    let t = null;
+    switch (name) {
+      case "matrix":
+        if (a.length >= 6) t = [a[0], a[1], a[2], a[3], a[4], a[5]];
+        break;
+      case "translate":
+        t = [1, 0, 0, 1, a[0] ?? 0, a[1] ?? 0];
+        break;
+      case "scale":
+        t = [a[0] ?? 1, 0, 0, a[1] ?? a[0] ?? 1, 0, 0];
+        break;
+      case "rotate": {
+        const r = (a[0] ?? 0) * Math.PI / 180;
+        const c = Math.cos(r);
+        const s = Math.sin(r);
+        t = [c, s, -s, c, 0, 0];
+        if (a.length >= 3) {
+          const cx = a[1];
+          const cy = a[2];
+          t = mulMat(mulMat([1, 0, 0, 1, cx, cy], t), [1, 0, 0, 1, -cx, -cy]);
+        }
+        break;
+      }
+      case "skewx":
+        t = [1, 0, Math.tan((a[0] ?? 0) * Math.PI / 180), 1, 0, 0];
+        break;
+      case "skewy":
+        t = [1, Math.tan((a[0] ?? 0) * Math.PI / 180), 0, 1, 0, 0];
+        break;
+    }
+    if (t) m = mulMat(m, t);
+  }
+  return m;
+}
+var NUM_RE = /[-+]?(?:\d+\.?\d*|\.\d+)(?:[eE][-+]?\d+)?/y;
+function flattenCubic(x0, y0, x1, y1, x2, y2, x3, y3, tol, depth, out) {
+  const dx = x3 - x0;
+  const dy = y3 - y0;
+  const len2 = Math.hypot(dx, dy);
+  let flat;
+  if (len2 < 1e-9) {
+    flat = Math.max(Math.hypot(x1 - x0, y1 - y0), Math.hypot(x2 - x0, y2 - y0));
+  } else {
+    flat = Math.max(
+      Math.abs((x1 - x0) * dy - (y1 - y0) * dx),
+      Math.abs((x2 - x0) * dy - (y2 - y0) * dx)
+    );
+    flat /= len2;
+  }
+  if (flat <= tol || depth >= 12) {
+    out.push(x3, y3);
+    return;
+  }
+  const x01 = (x0 + x1) / 2;
+  const y01 = (y0 + y1) / 2;
+  const x12 = (x1 + x2) / 2;
+  const y12 = (y1 + y2) / 2;
+  const x23 = (x2 + x3) / 2;
+  const y23 = (y2 + y3) / 2;
+  const xa = (x01 + x12) / 2;
+  const ya = (y01 + y12) / 2;
+  const xb = (x12 + x23) / 2;
+  const yb = (y12 + y23) / 2;
+  const xm = (xa + xb) / 2;
+  const ym = (ya + yb) / 2;
+  flattenCubic(x0, y0, x01, y01, xa, ya, xm, ym, tol, depth + 1, out);
+  flattenCubic(xm, ym, xb, yb, x23, y23, x3, y3, tol, depth + 1, out);
+}
+function flattenPath(d, matrix = IDENTITY, tol = 0.04) {
+  const polys = [];
+  let cur = null;
+  let i = 0;
+  const n = d.length;
+  let cx = 0;
+  let cy = 0;
+  let sx = 0;
+  let sy = 0;
+  let lcx = 0;
+  let lcy = 0;
+  let prevCmd = "";
+  const tx = (x, y) => matrix[0] * x + matrix[2] * y + matrix[4];
+  const ty = (x, y) => matrix[1] * x + matrix[3] * y + matrix[5];
+  const fail = (msg) => {
+    throw new AssetLoadError(`Invalid SVG path data: ${msg}`);
+  };
+  const skip = () => {
+    while (i < n) {
+      const c = d.charCodeAt(i);
+      if (c === 32 || c === 44 || c === 9 || c === 10 || c === 13) i++;
+      else break;
+    }
+  };
+  const hasNum = () => {
+    skip();
+    if (i >= n) return false;
+    const c = d[i];
+    return c >= "0" && c <= "9" || c === "." || c === "-" || c === "+";
+  };
+  const num = () => {
+    skip();
+    NUM_RE.lastIndex = i;
+    const m = NUM_RE.exec(d);
+    if (!m) return fail(`expected number at offset ${i}`);
+    i = NUM_RE.lastIndex;
+    return parseFloat(m[0]);
+  };
+  const flag = () => {
+    skip();
+    const c = d[i];
+    if (c === "0" || c === "1") {
+      i++;
+      return c === "1" ? 1 : 0;
+    }
+    return fail(`expected arc flag at offset ${i}`);
+  };
+  const finish = () => {
+    if (cur && cur.length >= 6) polys.push(cur);
+    cur = null;
+  };
+  const begin = () => {
+    if (!cur) {
+      cur = [tx(cx, cy), ty(cx, cy)];
+    }
+  };
+  const lineTo = (x, y) => {
+    begin();
+    cur.push(tx(x, y), ty(x, y));
+    cx = x;
+    cy = y;
+  };
+  const cubicTo = (x1, y1, x2, y2, x3, y3) => {
+    begin();
+    flattenCubic(
+      tx(cx, cy),
+      ty(cx, cy),
+      tx(x1, y1),
+      ty(x1, y1),
+      tx(x2, y2),
+      ty(x2, y2),
+      tx(x3, y3),
+      ty(x3, y3),
+      tol,
+      0,
+      cur
+    );
+    lcx = x2;
+    lcy = y2;
+    cx = x3;
+    cy = y3;
+  };
+  const quadTo = (x1, y1, x2, y2) => {
+    cubicTo(
+      cx + 2 / 3 * (x1 - cx),
+      cy + 2 / 3 * (y1 - cy),
+      x2 + 2 / 3 * (x1 - x2),
+      y2 + 2 / 3 * (y1 - y2),
+      x2,
+      y2
+    );
+    lcx = x1;
+    lcy = y1;
+  };
+  const arcTo = (rxIn, ryIn, rotDeg, large, sweep, x, y) => {
+    let rx = Math.abs(rxIn);
+    let ry = Math.abs(ryIn);
+    if (rx === 0 || ry === 0 || x === cx && y === cy) {
+      lineTo(x, y);
+      return;
+    }
+    const phi = rotDeg * Math.PI / 180;
+    const cosP = Math.cos(phi);
+    const sinP = Math.sin(phi);
+    const dx2 = (cx - x) / 2;
+    const dy2 = (cy - y) / 2;
+    const x1p = cosP * dx2 + sinP * dy2;
+    const y1p = -sinP * dx2 + cosP * dy2;
+    const lam = x1p * x1p / (rx * rx) + y1p * y1p / (ry * ry);
+    if (lam > 1) {
+      const s = Math.sqrt(lam);
+      rx *= s;
+      ry *= s;
+    }
+    const num1 = rx * rx * ry * ry - rx * rx * y1p * y1p - ry * ry * x1p * x1p;
+    const den = rx * rx * y1p * y1p + ry * ry * x1p * x1p;
+    let co = den === 0 ? 0 : Math.sqrt(Math.max(0, num1 / den));
+    if (large === sweep) co = -co;
+    const cxp = co * rx * y1p / ry;
+    const cyp = -co * ry * x1p / rx;
+    const ccx = cosP * cxp - sinP * cyp + (cx + x) / 2;
+    const ccy = sinP * cxp + cosP * cyp + (cy + y) / 2;
+    const ang = (ux, uy, vx, vy) => {
+      const a = Math.atan2(ux * vy - uy * vx, ux * vx + uy * vy);
+      return a;
+    };
+    const theta1 = ang(1, 0, (x1p - cxp) / rx, (y1p - cyp) / ry);
+    let dTheta = ang((x1p - cxp) / rx, (y1p - cyp) / ry, (-x1p - cxp) / rx, (-y1p - cyp) / ry);
+    if (!sweep && dTheta > 0) dTheta -= 2 * Math.PI;
+    else if (sweep && dTheta < 0) dTheta += 2 * Math.PI;
+    const segs = Math.max(1, Math.ceil(Math.abs(dTheta) / (Math.PI / 2) - 1e-9));
+    const delta = dTheta / segs;
+    const k = 4 / 3 * Math.tan(delta / 4);
+    let t = theta1;
+    for (let s = 0; s < segs; s++) {
+      const c1 = Math.cos(t);
+      const s1 = Math.sin(t);
+      const c2 = Math.cos(t + delta);
+      const s2 = Math.sin(t + delta);
+      const p1x = c1 - k * s1;
+      const p1y = s1 + k * c1;
+      const p2x = c2 + k * s2;
+      const p2y = s2 - k * c2;
+      const map = (ex, ey) => [
+        cosP * rx * ex - sinP * ry * ey + ccx,
+        sinP * rx * ex + cosP * ry * ey + ccy
+      ];
+      const [a1x, a1y] = map(p1x, p1y);
+      const [a2x, a2y] = map(p2x, p2y);
+      const last = s === segs - 1;
+      const [a3x, a3y] = last ? [x, y] : map(c2, s2);
+      cubicTo(a1x, a1y, a2x, a2y, a3x, a3y);
+      t += delta;
+    }
+  };
+  let cmd = "";
+  while (true) {
+    skip();
+    if (i >= n) break;
+    const ch = d[i];
+    if (/[MmZzLlHhVvCcSsQqTtAa]/.test(ch)) {
+      cmd = ch;
+      i++;
+    } else if (!cmd || cmd === "Z" || cmd === "z") {
+      return fail(`unexpected character '${ch}' at offset ${i}`);
+    }
+    const rel = cmd === cmd.toLowerCase();
+    const up = cmd.toUpperCase();
+    switch (up) {
+      case "M": {
+        let x = num();
+        let y = num();
+        if (rel) {
+          x += cx;
+          y += cy;
+        }
+        finish();
+        cx = sx = x;
+        cy = sy = y;
+        cur = [tx(x, y), ty(x, y)];
+        cmd = rel ? "l" : "L";
+        break;
+      }
+      case "L": {
+        let x = num();
+        let y = num();
+        if (rel) {
+          x += cx;
+          y += cy;
+        }
+        lineTo(x, y);
+        break;
+      }
+      case "H": {
+        const x = num();
+        lineTo(rel ? cx + x : x, cy);
+        break;
+      }
+      case "V": {
+        const y = num();
+        lineTo(cx, rel ? cy + y : y);
+        break;
+      }
+      case "C": {
+        let x1 = num();
+        let y1 = num();
+        let x2 = num();
+        let y2 = num();
+        let x = num();
+        let y = num();
+        if (rel) {
+          x1 += cx;
+          y1 += cy;
+          x2 += cx;
+          y2 += cy;
+          x += cx;
+          y += cy;
+        }
+        cubicTo(x1, y1, x2, y2, x, y);
+        break;
+      }
+      case "S": {
+        let x2 = num();
+        let y2 = num();
+        let x = num();
+        let y = num();
+        if (rel) {
+          x2 += cx;
+          y2 += cy;
+          x += cx;
+          y += cy;
+        }
+        const reflect = prevCmd === "C" || prevCmd === "S";
+        const x1 = reflect ? 2 * cx - lcx : cx;
+        const y1 = reflect ? 2 * cy - lcy : cy;
+        cubicTo(x1, y1, x2, y2, x, y);
+        break;
+      }
+      case "Q": {
+        let x1 = num();
+        let y1 = num();
+        let x = num();
+        let y = num();
+        if (rel) {
+          x1 += cx;
+          y1 += cy;
+          x += cx;
+          y += cy;
+        }
+        quadTo(x1, y1, x, y);
+        break;
+      }
+      case "T": {
+        let x = num();
+        let y = num();
+        if (rel) {
+          x += cx;
+          y += cy;
+        }
+        const reflect = prevCmd === "Q" || prevCmd === "T";
+        const x1 = reflect ? 2 * cx - lcx : cx;
+        const y1 = reflect ? 2 * cy - lcy : cy;
+        quadTo(x1, y1, x, y);
+        break;
+      }
+      case "A": {
+        const rx = num();
+        const ry = num();
+        const rot = num();
+        const large = flag();
+        const sweep = flag();
+        let x = num();
+        let y = num();
+        if (rel) {
+          x += cx;
+          y += cy;
+        }
+        arcTo(rx, ry, rot, large, sweep, x, y);
+        break;
+      }
+      case "Z": {
+        finish();
+        cx = sx;
+        cy = sy;
+        break;
+      }
+      default:
+        return fail(`unsupported command '${cmd}'`);
+    }
+    prevCmd = up;
+    if (up !== "Z" && !hasNum() && i < n && !/[MmZzLlHhVvCcSsQqTtAa]/.test(d[i])) {
+      return fail(`unexpected character '${d[i]}' at offset ${i}`);
+    }
+  }
+  finish();
+  return polys;
+}
+function flattenPathAdaptive(d, matrix = IDENTITY) {
+  const coarse = flattenPath(d, matrix, 1e9);
+  let minX = Infinity;
+  let minY = Infinity;
+  let maxX = -Infinity;
+  let maxY = -Infinity;
+  for (const p of coarse) {
+    for (let k = 0; k < p.length; k += 2) {
+      minX = Math.min(minX, p[k]);
+      maxX = Math.max(maxX, p[k]);
+      minY = Math.min(minY, p[k + 1]);
+      maxY = Math.max(maxY, p[k + 1]);
+    }
+  }
+  const dim = Math.max(maxX - minX, maxY - minY);
+  const tol = Number.isFinite(dim) && dim > 0 ? Math.max(dim * 25e-6, 1e-7) : 0.04;
+  return flattenPath(d, matrix, tol);
+}
+var SKIP_CONTAINERS = /* @__PURE__ */ new Set([
+  "defs",
+  "clippath",
+  "mask",
+  "symbol",
+  "style",
+  "title",
+  "desc",
+  "metadata",
+  "pattern",
+  "marker",
+  "lineargradient",
+  "radialgradient",
+  "filter",
+  "script",
+  "text",
+  "foreignobject"
+]);
+function parseAttrs(src) {
+  const attrs = {};
+  const re = /([\w:.-]+)\s*=\s*(?:"([^"]*)"|'([^']*)')/g;
+  let m;
+  while ((m = re.exec(src)) !== null) {
+    attrs[m[1].toLowerCase()] = m[2] ?? m[3] ?? "";
+  }
+  const style = attrs["style"];
+  if (style) {
+    for (const part of style.split(";")) {
+      const idx = part.indexOf(":");
+      if (idx > 0) {
+        attrs[part.slice(0, idx).trim().toLowerCase()] = part.slice(idx + 1).trim();
+      }
+    }
+  }
+  return attrs;
+}
+function len(v, fallback = 0) {
+  if (v === void 0) return fallback;
+  if (v.trim().endsWith("%")) return fallback;
+  const f = parseFloat(v);
+  return Number.isFinite(f) ? f : fallback;
+}
+function ellipsePath(cx, cy, rx, ry) {
+  return `M ${cx - rx} ${cy} A ${rx} ${ry} 0 1 0 ${cx + rx} ${cy} A ${rx} ${ry} 0 1 0 ${cx - rx} ${cy} Z`;
+}
+function rectPath(a) {
+  const x = len(a["x"]);
+  const y = len(a["y"]);
+  const w = len(a["width"]);
+  const h = len(a["height"]);
+  if (w <= 0 || h <= 0) return null;
+  let rx = len(a["rx"], NaN);
+  let ry = len(a["ry"], NaN);
+  if (Number.isNaN(rx) && Number.isNaN(ry)) {
+    rx = 0;
+    ry = 0;
+  } else if (Number.isNaN(rx)) {
+    rx = ry;
+  } else if (Number.isNaN(ry)) {
+    ry = rx;
+  }
+  rx = Math.min(Math.max(rx, 0), w / 2);
+  ry = Math.min(Math.max(ry, 0), h / 2);
+  if (rx === 0 || ry === 0) {
+    return `M ${x} ${y} H ${x + w} V ${y + h} H ${x} Z`;
+  }
+  return `M ${x + rx} ${y} H ${x + w - rx} A ${rx} ${ry} 0 0 1 ${x + w} ${y + ry} V ${y + h - ry} A ${rx} ${ry} 0 0 1 ${x + w - rx} ${y + h} H ${x + rx} A ${rx} ${ry} 0 0 1 ${x} ${y + h - ry} V ${y + ry} A ${rx} ${ry} 0 0 1 ${x + rx} ${y} Z`;
+}
+function pointsPath(points) {
+  if (!points) return null;
+  const nums = points.split(/[\s,]+/).filter((s) => s.length > 0).map(Number);
+  if (nums.length < 6 || nums.some((v) => !Number.isFinite(v))) return null;
+  let d = `M ${nums[0]} ${nums[1]}`;
+  for (let k = 2; k + 1 < nums.length; k += 2) d += ` L ${nums[k]} ${nums[k + 1]}`;
+  return d + " Z";
+}
+function parseSvgDocument(svg) {
+  const src = svg.replace(/<!--[\s\S]*?-->/g, "").replace(/<!\[CDATA\[[\s\S]*?\]\]>/g, "").replace(/<\?[\s\S]*?\?>/g, "").replace(/<!DOCTYPE[^>]*>/gi, "");
+  const items = [];
+  const stack = [
+    { name: "#root", matrix: IDENTITY, fill: void 0, fillRule: "nonzero", hidden: false }
+  ];
+  let skipDepth = 0;
+  const tagRe = /<(\/?)([a-zA-Z][\w:.-]*)((?:"[^"]*"|'[^']*'|[^>"'])*?)(\/?)>/g;
+  let m;
+  while ((m = tagRe.exec(src)) !== null) {
+    const closing = m[1] === "/";
+    const name = m[2].toLowerCase();
+    const selfClosing = m[4] === "/";
+    if (closing) {
+      if (SKIP_CONTAINERS.has(name)) {
+        skipDepth = Math.max(0, skipDepth - 1);
+      } else if (stack.length > 1) {
+        stack.pop();
+      }
+      continue;
+    }
+    if (SKIP_CONTAINERS.has(name)) {
+      if (!selfClosing) skipDepth++;
+      continue;
+    }
+    if (skipDepth > 0) continue;
+    const parent = stack[stack.length - 1];
+    const a = parseAttrs(m[3]);
+    const matrix = mulMat(parent.matrix, parseTransform(a["transform"]));
+    const hidden = parent.hidden || a["display"] === "none" || a["visibility"] === "hidden" || a["opacity"] === "0";
+    const fill = a["fill"] ?? parent.fill;
+    const rule = (a["fill-rule"] ?? parent.fillRule) === "evenodd" ? "evenodd" : "nonzero";
+    let d = null;
+    switch (name) {
+      case "path":
+        d = a["d"] ?? null;
+        break;
+      case "rect":
+        d = rectPath(a);
+        break;
+      case "circle": {
+        const r = len(a["r"]);
+        d = r > 0 ? ellipsePath(len(a["cx"]), len(a["cy"]), r, r) : null;
+        break;
+      }
+      case "ellipse": {
+        const rx = len(a["rx"]);
+        const ry = len(a["ry"]);
+        d = rx > 0 && ry > 0 ? ellipsePath(len(a["cx"]), len(a["cy"]), rx, ry) : null;
+        break;
+      }
+      case "polygon":
+      case "polyline":
+        d = pointsPath(a["points"]);
+        break;
+      default:
+        break;
+    }
+    if (d && !hidden && fill !== "none" && fill !== "transparent") {
+      items.push({ d, matrix, fillRule: rule });
+    }
+    if (!selfClosing) {
+      stack.push({ name, matrix, fill, fillRule: rule, hidden });
+    }
+  }
+  return items;
+}
+var BAND = 14;
+function fitGroupsToGrid(groups, grid) {
+  let minX = Infinity;
+  let minY = Infinity;
+  let maxX = -Infinity;
+  let maxY = -Infinity;
+  for (const g of groups) {
+    for (const p of g.polys) {
+      for (let k = 0; k < p.length; k += 2) {
+        const x = p[k];
+        const y = p[k + 1];
+        if (!Number.isFinite(x) || !Number.isFinite(y)) {
+          throw new AssetLoadError("SVG contains non-finite coordinates");
+        }
+        if (x < minX) minX = x;
+        if (x > maxX) maxX = x;
+        if (y < minY) minY = y;
+        if (y > maxY) maxY = y;
+      }
+    }
+  }
+  const bw = maxX - minX;
+  const bh = maxY - minY;
+  if (!(bw > 0) || !(bh > 0)) {
+    throw new AssetLoadError("SVG shape has no visible area");
+  }
+  const halfDiag = 0.5 * Math.hypot(bw, bh);
+  const scale = Math.min(0.72 * grid / Math.max(bw, bh), 0.44 * grid / halfDiag);
+  const ox = grid / 2 - (minX + maxX) / 2 * scale;
+  const oy = grid / 2 - (minY + maxY) / 2 * scale;
+  const out = groups.map((g) => ({
+    fillRule: g.fillRule,
+    polys: g.polys.map((p) => {
+      const q = new Array(p.length);
+      for (let k = 0; k < p.length; k += 2) {
+        q[k] = p[k] * scale + ox;
+        q[k + 1] = p[k + 1] * scale + oy;
+      }
+      return q;
+    })
+  }));
+  return { groups: out, scale };
+}
+function fillMaskFromGroups(groups, size) {
+  const mask = new Uint8Array(size * size);
+  for (const g of groups) {
+    const rows = new Array(size);
+    for (let y = 0; y < size; y++) rows[y] = [];
+    for (const p of g.polys) {
+      const count = p.length / 2;
+      for (let k = 0; k < count; k++) {
+        const x0 = p[k * 2];
+        const y0 = p[k * 2 + 1];
+        const nk = (k + 1) % count;
+        const x1 = p[nk * 2];
+        const y1 = p[nk * 2 + 1];
+        if (y0 === y1) continue;
+        const dir = y1 > y0 ? 1 : -1;
+        const lo = Math.min(y0, y1);
+        const hi = Math.max(y0, y1);
+        const rowStart = Math.max(0, Math.ceil(lo - 0.5));
+        const rowEnd = Math.min(size - 1, Math.ceil(hi - 0.5) - 1);
+        const slope = (x1 - x0) / (y1 - y0);
+        for (let y = rowStart; y <= rowEnd; y++) {
+          const c = y + 0.5;
+          rows[y].push(x0 + (c - y0) * slope, dir);
+        }
+      }
+    }
+    for (let y = 0; y < size; y++) {
+      const r = rows[y];
+      if (r.length === 0) continue;
+      const pairs = r.length / 2;
+      const order = new Array(pairs);
+      for (let k = 0; k < pairs; k++) order[k] = k;
+      order.sort((a, b) => r[a * 2] - r[b * 2]);
+      let winding = 0;
+      const base = y * size;
+      for (let k = 0; k < pairs - 1; k++) {
+        const idx = order[k];
+        winding += r[idx * 2 + 1];
+        const inside = g.fillRule === "evenodd" ? (k + 1) % 2 === 1 : winding !== 0;
+        if (!inside) continue;
+        const xa = r[idx * 2];
+        const xb = r[order[k + 1] * 2];
+        const from = Math.max(0, Math.ceil(xa - 0.5));
+        const to = Math.min(size - 1, Math.ceil(xb - 0.5) - 1);
+        for (let x = from; x <= to; x++) mask[base + x] = 1;
+      }
+    }
+  }
+  return mask;
+}
+var CRACK_CLEARANCE = 2.5;
+function floodExterior(mask, size) {
+  const { outDist } = binaryDistances(mask, size, size);
+  const open = new Uint8Array(size * size);
+  for (let i = 0; i < open.length; i++) {
+    open[i] = mask[i] === 0 && outDist[i] >= CRACK_CLEARANCE ? 1 : 0;
+  }
+  const core = new Uint8Array(size * size);
+  const stack = new Int32Array(size * size);
+  let top = 0;
+  const push = (i) => {
+    if (open[i] === 1 && core[i] === 0) {
+      core[i] = 1;
+      stack[top++] = i;
+    }
+  };
+  for (let k = 0; k < size; k++) {
+    push(k);
+    push((size - 1) * size + k);
+    push(k * size);
+    push(k * size + size - 1);
+  }
+  while (top > 0) {
+    const i = stack[--top];
+    const x = i % size;
+    if (x > 0) push(i - 1);
+    if (x < size - 1) push(i + 1);
+    if (i >= size) push(i - size);
+    if (i < size * (size - 1)) push(i + size);
+  }
+  const grown = binaryDistances(core, size, size).outDist;
+  const ext = new Uint8Array(size * size);
+  for (let i = 0; i < ext.length; i++) {
+    ext[i] = mask[i] === 0 && (core[i] === 1 || grown[i] <= CRACK_CLEARANCE + 1) ? 1 : 0;
+  }
+  return ext;
+}
+function exactBandDistances(groups, size, exterior) {
+  const minSq = new Float32Array(size * size).fill(Infinity);
+  const isExterior = (x, y) => {
+    const ix = Math.floor(x);
+    const iy = Math.floor(y);
+    if (ix < 0 || iy < 0 || ix >= size || iy >= size) return true;
+    return exterior[iy * size + ix] === 0;
+  };
+  for (const g of groups) {
+    for (const p of g.polys) {
+      const count = p.length / 2;
+      for (let k = 0; k < count; k++) {
+        const ax = p[k * 2];
+        const ay = p[k * 2 + 1];
+        const nk = (k + 1) % count;
+        const bx = p[nk * 2];
+        const by = p[nk * 2 + 1];
+        const ex = bx - ax;
+        const ey = by - ay;
+        const l2 = ex * ex + ey * ey;
+        if (l2 === 0) continue;
+        if (exterior) {
+          const l = Math.sqrt(l2);
+          const mx = (ax + bx) / 2;
+          const my = (ay + by) / 2;
+          const nx = -ey / l * 3;
+          const ny = ex / l * 3;
+          if (!isExterior(mx + nx, my + ny) && !isExterior(mx - nx, my - ny)) continue;
+        }
+        const x0 = Math.max(0, Math.floor(Math.min(ax, bx) - BAND));
+        const x1 = Math.min(size - 1, Math.ceil(Math.max(ax, bx) + BAND));
+        const y0 = Math.max(0, Math.floor(Math.min(ay, by) - BAND));
+        const y1 = Math.min(size - 1, Math.ceil(Math.max(ay, by) + BAND));
+        for (let y = y0; y <= y1; y++) {
+          const py = y + 0.5 - ay;
+          const row = y * size;
+          for (let x = x0; x <= x1; x++) {
+            const px = x + 0.5 - ax;
+            let t = l2 > 0 ? (px * ex + py * ey) / l2 : 0;
+            t = t < 0 ? 0 : t > 1 ? 1 : t;
+            const dx = px - ex * t;
+            const dy = py - ey * t;
+            const dsq = dx * dx + dy * dy;
+            if (dsq < minSq[row + x]) minSq[row + x] = dsq;
+          }
+        }
+      }
+    }
+  }
+  return minSq;
+}
+function buildVectorSdf(groups, size, maxDistance, fillHoles = false, closeGaps = 0) {
+  const fitted = fitGroupsToGrid(groups, size).groups;
+  const mask = fillMaskFromGroups(fitted, size);
+  if (closeGaps > 0) {
+    const toArt = distanceToFeature(mask, size, size, 1);
+    const dilated = new Uint8Array(mask.length);
+    for (let i = 0; i < dilated.length; i++) {
+      dilated[i] = mask[i] === 1 || toArt[i] <= closeGaps ? 1 : 0;
+    }
+    const toEmpty = distanceToFeature(dilated, size, size, 0);
+    for (let i = 0; i < mask.length; i++) {
+      if (dilated[i] === 1 && toEmpty[i] > closeGaps) mask[i] = 1;
+    }
+  }
+  let exterior = null;
+  if (fillHoles) {
+    exterior = floodExterior(mask, size);
+    for (let i = 0; i < mask.length; i++) mask[i] = exterior[i] === 1 ? 0 : 1;
+  }
+  let inside = 0;
+  for (let i = 0; i < mask.length; i++) inside += mask[i];
+  if (inside === 0) {
+    throw new AssetLoadError("SVG shape rasterized to an empty silhouette");
+  }
+  const minSq = exactBandDistances(fitted, size, exterior || closeGaps > 0 ? mask : null);
+  const { outDist, inDist } = binaryDistances(mask, size, size);
+  const total = size * size;
+  const cpuDistances = new Float32Array(total);
+  const floatData = new Float32Array(total);
+  const r8Data = new Uint8Array(total);
+  const blendStart = BAND - 6;
+  for (let i = 0; i < total; i++) {
+    const isIn = mask[i] === 1;
+    const far = Math.max(0, (isIn ? inDist[i] : outDist[i]) - 0.5);
+    const sq = minSq[i];
+    let mag;
+    if (sq === Infinity) {
+      mag = far;
+    } else {
+      const e = Math.sqrt(sq);
+      if (e <= blendStart) {
+        mag = e;
+      } else {
+        const w = Math.min(1, (e - blendStart) / (BAND - blendStart));
+        const s = w * w * (3 - 2 * w);
+        mag = e * (1 - s) + Math.max(far, e) * s;
+      }
+    }
+    const dist = isIn ? -mag : mag;
+    cpuDistances[i] = dist;
+    floatData[i] = dist / size;
+    const norm = Math.max(0, Math.min(1, dist / maxDistance * 0.5 + 0.5));
+    r8Data[i] = Math.round(norm * 255);
+  }
+  return { width: size, height: size, maxDistance, cpuDistances, floatData, r8Data };
+}
+
 // src/shape/pipeline.ts
-function buildShapePipeline(shape, gridSize = 1024, maxDistance = 96) {
-  const rasterized = rasterizeShape(shape, gridSize, gridSize);
-  const sdf = computeSdf(rasterized.mask, gridSize, gridSize, maxDistance);
-  const hitTest = (u, v) => {
+function vectorGroupsForShape(shape) {
+  if (shape.type === "svg-path") {
+    if (!shape.d || shape.d.trim().length === 0) {
+      throw new AssetLoadError('SVG path "d" attribute must not be empty');
+    }
+    return [{ polys: flattenPathAdaptive(shape.d, IDENTITY), fillRule: "nonzero" }];
+  }
+  if (shape.type === "svg-file") {
+    if (!shape.asset || shape.asset.trim().length === 0) {
+      throw new AssetLoadError("SVG file asset must not be empty");
+    }
+    const asset = shape.asset.trim();
+    if (!asset.includes("<")) {
+      return [{ polys: flattenPathAdaptive(asset, IDENTITY), fillRule: "nonzero" }];
+    }
+    const items = parseSvgDocument(asset);
+    const groups = [];
+    for (const item of items) {
+      const polys = flattenPathAdaptive(item.d, item.matrix);
+      if (polys.length > 0) groups.push({ polys, fillRule: item.fillRule });
+    }
+    if (groups.length === 0) {
+      throw new AssetLoadError(
+        "Failed to parse SVG: no filled shapes found. Strokes-only icons must be converted to outlines."
+      );
+    }
+    return groups;
+  }
+  return null;
+}
+function solidShape(shape) {
+  return (shape.type === "svg-path" || shape.type === "svg-file") && shape.fillHoles === true;
+}
+function closeRadius(shape) {
+  return shape.type === "svg-path" || shape.type === "svg-file" ? shape.closeGaps : void 0;
+}
+function interleave(a, b) {
+  const out = new Float32Array(a.length * 2);
+  for (let i = 0; i < a.length; i++) {
+    out[i * 2] = a[i];
+    out[i * 2 + 1] = b[i];
+  }
+  return out;
+}
+function buildVectorFields(shape, groups, gridSize, maxDistance) {
+  const sdf = buildVectorSdf(groups, gridSize, maxDistance, solidShape(shape), 0);
+  const close = closeRadius(shape);
+  const env = close === void 0 ? sdf : buildVectorSdf(groups, gridSize, maxDistance, true, close);
+  return { sdf, rgData: interleave(sdf.floatData, env.floatData) };
+}
+function makeHitTest(sdf, gridSize, maxDistance) {
+  return (u, v) => {
     if (u < 0 || u > 1 || v < 0 || v > 1) {
       return maxDistance;
     }
     const px = Math.min(gridSize - 1, Math.max(0, Math.floor(u * gridSize)));
     const py = Math.min(gridSize - 1, Math.max(0, Math.floor(v * gridSize)));
     return sdf.cpuDistances[py * gridSize + px];
-  };
-  return {
-    sdf,
-    shape,
-    hitTest
   };
 }
-async function buildShapePipelineAsync(shape, gridSize = 1024, maxDistance = 96) {
-  const rasterized = rasterizeShape(shape, gridSize, gridSize);
-  const sdf = await computeSdfAsync(rasterized.mask, gridSize, gridSize, maxDistance);
-  const hitTest = (u, v) => {
-    if (u < 0 || u > 1 || v < 0 || v > 1) {
-      return maxDistance;
-    }
-    const px = Math.min(gridSize - 1, Math.max(0, Math.floor(u * gridSize)));
-    const py = Math.min(gridSize - 1, Math.max(0, Math.floor(v * gridSize)));
-    return sdf.cpuDistances[py * gridSize + px];
-  };
-  return {
-    sdf,
-    shape,
-    hitTest
-  };
+function buildShapePipeline(shape, gridSize = 1024, maxDistance = 256) {
+  const groups = vectorGroupsForShape(shape);
+  let sdf;
+  let rgData;
+  if (groups) {
+    ({ sdf, rgData } = buildVectorFields(shape, groups, gridSize, maxDistance));
+  } else {
+    const rasterized = rasterizeShape(shape, gridSize, gridSize);
+    sdf = computeSdf(rasterized.mask, gridSize, gridSize, maxDistance);
+    rgData = interleave(sdf.floatData, sdf.floatData);
+  }
+  return { sdf, shape, hitTest: makeHitTest(sdf, gridSize, maxDistance), rgData };
+}
+async function buildShapePipelineAsync(shape, gridSize = 1024, maxDistance = 256) {
+  const groups = vectorGroupsForShape(shape);
+  let sdf;
+  let rgData;
+  if (groups) {
+    ({ sdf, rgData } = buildVectorFields(shape, groups, gridSize, maxDistance));
+  } else {
+    const rasterized = rasterizeShape(shape, gridSize, gridSize);
+    sdf = await computeSdfAsync(rasterized.mask, gridSize, gridSize, maxDistance);
+    rgData = interleave(sdf.floatData, sdf.floatData);
+  }
+  return { sdf, shape, hitTest: makeHitTest(sdf, gridSize, maxDistance), rgData };
 }
 
 // src/color/spring.ts
@@ -6089,7 +7065,7 @@ function createRenderer(options) {
     u_shapePos: [0.5, 0.52],
     u_shapeScale: 0.28,
     u_shapeRotation: 0,
-    u_maxDistance: 96,
+    u_maxDistance: 256,
     u_edgeWidth: 4e-3,
     u_edgeFalloff: 0.09,
     u_edgeIntensity: 1,
@@ -6108,11 +7084,12 @@ function createRenderer(options) {
   let quad = createQuadMesh(gl);
   let program = createShaderProgram(gl, QUAD_VERTEX_SHADER, GLOW_FRAGMENT_SHADER);
   let shapePipeline = buildShapePipeline(currentScene.shape);
-  let sdfTexture = createR8Texture(
+  let sdfTexture = createR16FTexture(
     gl,
     shapePipeline.sdf.width,
     shapePipeline.sdf.height,
-    shapePipeline.sdf.r8Data
+    shapePipeline.rgData,
+    2
   );
   let contentResult = rasterizeCenterContent(currentScene.fill.content);
   let contentTexture = createRgbaTexture(
@@ -6299,11 +7276,12 @@ function createRenderer(options) {
       gl = getWebGL2Context(canvas);
       quad = createQuadMesh(gl);
       program = createShaderProgram(gl, QUAD_VERTEX_SHADER, GLOW_FRAGMENT_SHADER);
-      sdfTexture = createR8Texture(
+      sdfTexture = createR16FTexture(
         gl,
         shapePipeline.sdf.width,
         shapePipeline.sdf.height,
-        shapePipeline.sdf.r8Data
+        shapePipeline.rgData,
+        2
       );
       contentTexture = createRgbaTexture(
         gl,
@@ -6476,6 +7454,8 @@ function createRenderer(options) {
     if (uShapeRotLoc) gl.uniform1f(uShapeRotLoc, currentScene.shape.rotation * Math.PI / 180);
     const uShapeTypeLoc = program.getUniformLocation("u_shapeType");
     if (uShapeTypeLoc) gl.uniform1i(uShapeTypeLoc, currentUniforms.u_shapeType);
+    const uColorFlowLoc = program.getUniformLocation("u_colorFlow");
+    if (uColorFlowLoc) gl.uniform1i(uColorFlowLoc, currentScene.edge.colorFlow === "surface" ? 1 : 0);
     const uMaxDistLoc = program.getUniformLocation("u_maxDistance");
     if (uMaxDistLoc) gl.uniform1f(uMaxDistLoc, shapePipeline.sdf.maxDistance);
     const uEdgeWidthLoc = program.getUniformLocation("u_edgeWidth");
@@ -6580,7 +7560,7 @@ function createRenderer(options) {
       sdfTexture.updateData(
         shapePipeline.sdf.width,
         shapePipeline.sdf.height,
-        shapePipeline.sdf.r8Data
+        shapePipeline.rgData
       );
       contentResult = rasterizeCenterContent(currentScene.fill.content);
       contentTexture.updateData(contentResult.width, contentResult.height, contentResult.data);
@@ -6662,6 +7642,15 @@ function createRenderer(options) {
     },
     getActivePaletteIndex() {
       return currentPaletteIndex;
+    },
+    setActivePalette(index) {
+      const count = currentScene.palettes.length;
+      if (count === 0) return;
+      currentPaletteIndex = (Math.floor(index) % count + count) % count;
+      const pal = currentScene.palettes[currentPaletteIndex];
+      activePaletteOklab = pal.map((c) => parseColorToOklab(c));
+      paletteStopCount = Math.min(8, activePaletteOklab.length);
+      setSpringTargets(paletteSprings, activePaletteOklab);
     },
     getActiveMode() {
       return activeModeId;
@@ -6758,11 +7747,16 @@ export {
   WebGLContextLostError,
   buildShapePipeline,
   buildShapePipelineAsync,
+  buildVectorSdf,
   computeSdf,
   computeSdfAsync,
   createPaletteSprings,
   createRenderer,
   exampleScene,
+  fillMaskFromGroups,
+  fitGroupsToGrid,
+  flattenPath,
+  flattenPathAdaptive,
   generateRandomPalette,
   getRegularPolygonVertices,
   getStarVertices,
@@ -6772,6 +7766,7 @@ export {
   oklchToOklab,
   parseColorToLinearSrgb,
   parseColorToOklab,
+  parseSvgDocument,
   parseSvgString,
   rasterizeCenterContent,
   rasterizeCircle,

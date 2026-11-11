@@ -4,7 +4,7 @@ import { SystemClock } from './clock.js';
 import { NoopInput } from './input/noop.js';
 import { getWebGL2Context } from './gl/context.js';
 import { createQuadMesh, type QuadMesh } from './gl/quad.js';
-import { createR8Texture, createRgbaTexture, type GlTexture } from './gl/texture.js';
+import { createR16FTexture, createRgbaTexture, type GlTexture } from './gl/texture.js';
 import { rasterizeCenterContent, type ContentTextureResult } from './content/rasterize.js';
 import { createShaderProgram, type ShaderProgram } from './gl/program.js';
 import { QUAD_VERTEX_SHADER } from './shaders/quad.vert.js';
@@ -145,11 +145,12 @@ export function createRenderer(options: RendererOptions): Renderer {
   let quad: QuadMesh = createQuadMesh(gl);
   let program: ShaderProgram = createShaderProgram(gl, QUAD_VERTEX_SHADER, GLOW_FRAGMENT_SHADER);
   let shapePipeline: ShapePipelineResult = buildShapePipeline(currentScene.shape);
-  let sdfTexture: GlTexture = createR8Texture(
+  let sdfTexture: GlTexture = createR16FTexture(
     gl,
     shapePipeline.sdf.width,
     shapePipeline.sdf.height,
-    shapePipeline.sdf.r8Data,
+    shapePipeline.rgData,
+    2,
   );
   let contentResult: ContentTextureResult = rasterizeCenterContent(currentScene.fill.content);
   let contentTexture: GlTexture = createRgbaTexture(
@@ -367,11 +368,12 @@ export function createRenderer(options: RendererOptions): Renderer {
       gl = getWebGL2Context(canvas);
       quad = createQuadMesh(gl);
       program = createShaderProgram(gl, QUAD_VERTEX_SHADER, GLOW_FRAGMENT_SHADER);
-      sdfTexture = createR8Texture(
+      sdfTexture = createR16FTexture(
         gl,
         shapePipeline.sdf.width,
         shapePipeline.sdf.height,
-        shapePipeline.sdf.r8Data,
+        shapePipeline.rgData,
+        2,
       );
       contentTexture = createRgbaTexture(
         gl,
@@ -585,6 +587,9 @@ export function createRenderer(options: RendererOptions): Renderer {
     const uShapeTypeLoc = program.getUniformLocation('u_shapeType');
     if (uShapeTypeLoc) gl.uniform1i(uShapeTypeLoc, currentUniforms.u_shapeType);
 
+    const uColorFlowLoc = program.getUniformLocation('u_colorFlow');
+    if (uColorFlowLoc) gl.uniform1i(uColorFlowLoc, currentScene.edge.colorFlow === 'surface' ? 1 : 0);
+
     const uMaxDistLoc = program.getUniformLocation('u_maxDistance');
     if (uMaxDistLoc) gl.uniform1f(uMaxDistLoc, shapePipeline.sdf.maxDistance);
 
@@ -726,7 +731,7 @@ export function createRenderer(options: RendererOptions): Renderer {
       sdfTexture.updateData(
         shapePipeline.sdf.width,
         shapePipeline.sdf.height,
-        shapePipeline.sdf.r8Data,
+        shapePipeline.rgData,
       );
       contentResult = rasterizeCenterContent(currentScene.fill.content);
       contentTexture.updateData(contentResult.width, contentResult.height, contentResult.data);
@@ -827,6 +832,16 @@ export function createRenderer(options: RendererOptions): Renderer {
 
     getActivePaletteIndex(): number {
       return currentPaletteIndex;
+    },
+
+    setActivePalette(index: number): void {
+      const count = currentScene.palettes.length;
+      if (count === 0) return;
+      currentPaletteIndex = ((Math.floor(index) % count) + count) % count;
+      const pal = currentScene.palettes[currentPaletteIndex]!;
+      activePaletteOklab = pal.map((c) => parseColorToOklab(c));
+      paletteStopCount = Math.min(8, activePaletteOklab.length);
+      setSpringTargets(paletteSprings, activePaletteOklab);
     },
 
     getActiveMode(): string {

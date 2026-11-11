@@ -70,6 +70,8 @@ export interface Renderer {
   getUniformValues(): Readonly<UniformState>;
   handleClick(x: number, y: number): 'object' | 'background';
   getActivePaletteIndex(): number;
+  /** Smoothly transitions to the palette at `index` (wraps). Used by hosts for per-screen colors. */
+  setActivePalette(index: number): void;
   getActiveMode(): string;
   setMode(id: string, params?: Record<string, unknown>): void;
   triggerAction(

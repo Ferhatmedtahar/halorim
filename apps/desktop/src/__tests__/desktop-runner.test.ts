@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { createRenderer, ManualClock } from '@glowframe/core';
-import { triangleScene, hexagonScene, circleScene } from '@glowframe/presets';
+import { triangleScene, PRESET_SCENES } from '@glowframe/presets';
 import { HostInput } from '../host-input.ts';
 
 describe('Desktop Runner Webview Engine & Host Input Integration', () => {
@@ -151,13 +151,13 @@ describe('Desktop Runner Webview Engine & Host Input Integration', () => {
 
     expect(renderer.currentScene.meta.id).toBe('triangle-prism');
 
-    // Switch to Hexagon
-    renderer.setScene(hexagonScene);
-    expect(renderer.currentScene.meta.id).toBe('hexagon-prism');
+    // Switch to Windows 11 logo
+    renderer.setScene(PRESET_SCENES['windows-11']!);
+    expect(renderer.currentScene.meta.id).toBe('windows-11');
 
-    // Switch to Circle
-    renderer.setScene(circleScene);
-    expect(renderer.currentScene.meta.id).toBe('matrix-circle');
+    // Switch to Tux logo
+    renderer.setScene(PRESET_SCENES['tux-prism']!);
+    expect(renderer.currentScene.meta.id).toBe('tux-prism');
 
     renderer.dispose();
   });

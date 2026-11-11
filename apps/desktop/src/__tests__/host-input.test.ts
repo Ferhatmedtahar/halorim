@@ -55,4 +55,24 @@ describe('HostInput Implementation for Desktop Runner', () => {
     input.emitVisibilityChange(true);
     expect(onVisibility).toHaveBeenCalledWith(true);
   });
+
+  it('treats a pointer that stops reporting movement as having left', () => {
+    const input = new HostInput();
+    const events: string[] = [];
+    input.subscribe({
+      onPointerMove: () => events.push('move'),
+      onPointerDown: () => events.push('down'),
+      onPointerLeave: () => events.push('leave'),
+      onVisibilityChange: () => {},
+    });
+
+    expect(input.checkStale(10_000)).toBe(false); // never moved: nothing to leave
+    input.emitPointerMove(0.5, 0.5, 1000);
+    expect(input.checkStale(2500)).toBe(false); // still fresh
+    expect(input.checkStale(4500)).toBe(true); // frozen for >3s
+    expect(input.checkStale(9000)).toBe(false); // leave is emitted only once
+    input.emitPointerMove(0.6, 0.5, 9500); // movement resumes
+    expect(input.checkStale(10_000)).toBe(false);
+    expect(events).toEqual(['move', 'leave', 'move']);
+  });
 });

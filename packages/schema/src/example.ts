@@ -31,6 +31,7 @@ export const exampleScene: Scene = {
     falloff: 0.09,
     intensity: 1.0,
     dispersion: 0.35,
+    colorFlow: 'radial',
   },
   palettes: [
     ['oklch(0.75 0.2 350)', 'oklch(0.7 0.2 290)', 'oklch(0.7 0.18 250)', 'oklch(0.8 0.2 150)'],

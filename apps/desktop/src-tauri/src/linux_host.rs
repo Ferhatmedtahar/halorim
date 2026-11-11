@@ -224,44 +224,10 @@ impl Default for X11DesktopWindowConfig {
     }
 }
 
+/// Remembers the user's current GNOME wallpaper so it can be restored on exit.
+/// (The wallpaper window is opaque, so we no longer need to force a black background.)
 pub fn sync_gnome_background() {
-    #[cfg(target_os = "linux")]
-    {
-        if let Ok(desktop) = std::env::var("XDG_CURRENT_DESKTOP") {
-            if desktop.to_uppercase().contains("GNOME") {
-                let home = std::env::var("HOME").unwrap_or_else(|_| ".".to_string());
-                let config_dir = format!("{}/.config/glowframe", home);
-                let bg_path = format!("{}/background.png", config_dir);
-                let _ = std::fs::create_dir_all(&config_dir);
-
-                if !std::path::Path::new(&bg_path).exists() {
-                    let black_png: &[u8] = &[
-                        0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d,
-                        0x49, 0x48, 0x44, 0x52, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01,
-                        0x08, 0x06, 0x00, 0x00, 0x00, 0x1f, 0x15, 0xc4, 0x89, 0x00, 0x00, 0x00,
-                        0x0a, 0x49, 0x44, 0x41, 0x54, 0x78, 0x9c, 0x63, 0x60, 0x00, 0x00, 0x00,
-                        0x02, 0x00, 0x01, 0xe5, 0x27, 0xde, 0xfc, 0x00, 0x00, 0x00, 0x00, 0x49,
-                        0x45, 0x4e, 0x44, 0xae, 0x42, 0x60, 0x82,
-                    ];
-                    let _ = std::fs::write(&bg_path, black_png);
-                }
-
-                let uri = format!("file://{}", bg_path);
-                let _ = std::process::Command::new("gsettings")
-                    .args(["set", "org.gnome.desktop.background", "picture-uri", &uri])
-                    .output();
-                let _ = std::process::Command::new("gsettings")
-                    .args(["set", "org.gnome.desktop.background", "picture-uri-dark", &uri])
-                    .output();
-                let _ = std::process::Command::new("gsettings")
-                    .args(["set", "org.gnome.desktop.background", "primary-color", "#000000"])
-                    .output();
-                let _ = std::process::Command::new("gsettings")
-                    .args(["set", "org.gnome.desktop.background", "secondary-color", "#000000"])
-                    .output();
-            }
-        }
-    }
+    crate::background::save_original();
 }
 
 #[cfg(target_os = "linux")]
@@ -294,12 +260,10 @@ pub fn configure_linux_window(
                 gtk_win.move_(pos_x, pos_y);
                 gtk_win.resize(width, height);
 
-                if let Some(screen) = gtk::prelude::GtkWindowExt::screen(&gtk_win) {
-                    if let Some(visual) = screen.rgba_visual() {
-                        gtk_win.set_visual(Some(&visual));
-                    }
-                }
-                gtk_win.set_app_paintable(true);
+                // Show on every workspace so switching desktops never leaves a screen without it.
+                gtk_win.stick();
+                // The wallpaper is fully opaque: no RGBA visual, so the compositor does not have to
+                // alpha-blend two full-screen windows on every frame.
 
                 // Configure input region covering central interactive area around the glowing shape
                 // This leaves top bar, dock, and outer desktop icon margins 100% interactive and clickable

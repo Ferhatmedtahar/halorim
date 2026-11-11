@@ -80,9 +80,9 @@ describe('Library App Architecture & Gallery Constraints', () => {
     const aboutHtmlPath = path.join(libraryRoot, '.next/server/app/about.html');
     if (fs.existsSync(aboutHtmlPath)) {
       const html = fs.readFileSync(aboutHtmlPath, 'utf-8');
-      expect(html).toContain('Windows Setup');
+      expect(html).toContain('>Windows<');
       expect(html).toContain('Lively Wallpaper');
-      expect(html).toContain('Linux Setup');
+      expect(html).toContain('>Linux<');
       expect(html).toContain('layer-shell');
       expect(html).toContain('GNOME');
     }

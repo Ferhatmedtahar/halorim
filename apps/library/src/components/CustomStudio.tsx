@@ -4,19 +4,8 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import type { Scene } from '@glowframe/schema';
 import { parseScene } from '@glowframe/schema';
 import { exportPng, exportSceneJson, exportHtmlPack, PRESET_RESOLUTIONS } from '@glowframe/export';
-import {
-  TUX_SVG_PATH,
-  ARCH_SVG_PATH,
-  DEBIAN_SVG_PATH,
-  DIAMOND_SVG_PATH,
-  HYPERCUBE_SVG_PATH,
-  PHANTOM_SVG_PATH,
-  INFINITY_SVG_PATH,
-  FOUR_PANE_SVG_PATH,
-} from '@glowframe/presets';
+import { LOGOS, INFINITY_SVG_PATH, PHANTOM_SVG_PATH } from '@glowframe/presets';
 import { Button } from '@/components/ui/button';
-import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Slider } from '@/components/ui/slider';
@@ -25,67 +14,16 @@ import {
   Copy,
   Check,
   Upload,
-  Sparkles,
-  Sliders,
   Maximize2,
-  Terminal,
 } from 'lucide-react';
 
-const SHAPE_TEMPLATES: { id: string; name: string; d: string; viewBox: [number, number, number, number] }[] = [
-  {
-    id: 'triangle',
-    name: 'Triangle',
-    d: 'M 50 15 L 85 80 L 15 80 Z',
-    viewBox: [0, 0, 100, 100],
-  },
-  {
-    id: 'tux',
-    name: 'Tux Linux',
-    d: TUX_SVG_PATH,
-    viewBox: [0, 0, 100, 100],
-  },
-  {
-    id: 'arch',
-    name: 'Arch Apex',
-    d: ARCH_SVG_PATH,
-    viewBox: [0, 0, 110, 100],
-  },
-  {
-    id: 'debian',
-    name: 'Debian Swirl',
-    d: DEBIAN_SVG_PATH,
-    viewBox: [0, 0, 100, 100],
-  },
-  {
-    id: 'diamond',
-    name: 'Diamond Facet',
-    d: DIAMOND_SVG_PATH,
-    viewBox: [0, 0, 100, 100],
-  },
-  {
-    id: 'hypercube',
-    name: '4D Tesseract',
-    d: HYPERCUBE_SVG_PATH,
-    viewBox: [0, 0, 100, 100],
-  },
-  {
-    id: 'phantom',
-    name: 'Arcade Ghost',
-    d: PHANTOM_SVG_PATH,
-    viewBox: [0, 0, 100, 100],
-  },
-  {
-    id: 'infinity',
-    name: 'Infinity Loop',
-    d: INFINITY_SVG_PATH,
-    viewBox: [0, 0, 100, 100],
-  },
-  {
-    id: 'four-pane',
-    name: 'Four-Pane',
-    d: FOUR_PANE_SVG_PATH,
-    viewBox: [0, 0, 100, 100],
-  },
+type ShapeTemplate = { id: string; name: string; d: string; viewBox: [number, number, number, number] };
+
+const SHAPE_TEMPLATES: ShapeTemplate[] = [
+  { id: 'triangle', name: 'Triangle', d: 'M 50 15 L 85 80 L 15 80 Z', viewBox: [0, 0, 100, 100] },
+  { id: 'phantom', name: 'Arcade Ghost', d: PHANTOM_SVG_PATH, viewBox: [0, 0, 100, 100] },
+  { id: 'infinity', name: 'Infinity Loop', d: INFINITY_SVG_PATH, viewBox: [0, 0, 100, 100] },
+  ...LOGOS.map((l): ShapeTemplate => ({ id: l.id, name: l.name, d: l.d, viewBox: [0, 0, 100, 100] })),
 ];
 
 const PALETTE_PRESETS = [
@@ -421,215 +359,157 @@ export default function CustomStudio({ initialScene }: CustomStudioProps) {
   };
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 font-mono">
-      {/* Terminal Title Header */}
-      <div className="border border-terminal-border bg-terminal-card p-4 mb-6 shadow-sm">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-terminal-border/60 pb-3 mb-3">
-          <div className="flex items-center gap-3">
-            <span className="text-terminal-cyan font-bold text-sm tracking-wider flex items-center gap-2">
-              <Terminal className="w-4 h-4" />
-              GLOWFRAME // CUSTOM_SHAPE_STUDIO
-            </span>
-            <Badge variant="green" bracketed>READY</Badge>
-            <Badge variant="cyan" bracketed>WEBGL2_EDT</Badge>
-          </div>
-          <div className="text-[11px] text-terminal-dim">
-            SYSTEM_TIME: {new Date().toLocaleTimeString()} | INTERACTIVE_PROJECTION
-          </div>
-        </div>
-        <p className="text-xs text-terminal-dim leading-relaxed">
-          Input, transform, and modulate any 2D vector silhouette or SVG path. Real-time subpixel
-          distance field transformation with mouse-guided prismatic dispersion.
+    <div className="mx-auto max-w-site px-4 pb-8 pt-10 sm:px-6">
+      <header className="max-w-2xl animate-rise">
+        <h1 className="text-[clamp(36px,6vw,60px)] font-medium leading-[1.02] tracking-[-0.045em]">Studio</h1>
+        <p className="mt-4 text-muted">
+          Draw or upload any 2D shape and light its edge. Everything updates live, then export it as a still, an HTML
+          pack or a scene file.
         </p>
-      </div>
+      </header>
 
-      {statusMessage && (
-        <div className="mb-6 p-3 bg-terminal-cyan/10 border border-terminal-cyan/40 text-terminal-cyan text-xs flex items-center justify-between shadow-terminal-glow">
-          <span>&gt;_ {statusMessage}</span>
-        </div>
-      )}
+      <p
+        className="mt-6 h-5 text-sm text-muted"
+        role="status"
+        aria-live="polite"
+      >
+        {statusMessage ?? ''}
+      </p>
 
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+      <div className="mt-4 grid grid-cols-1 gap-10 lg:grid-cols-12 lg:gap-12">
         {/* Left Column: Real-time Live WebGL2 Viewport (7 Cols) */}
-        <div className="lg:col-span-7 flex flex-col gap-4">
+        <div className="flex flex-col gap-10 lg:col-span-7">
           <div
             ref={containerRef}
-            className="relative w-full aspect-video bg-black border border-terminal-border overflow-hidden shadow-2xl group"
+            className="relative aspect-video w-full overflow-hidden rounded-2xl bg-black"
           >
-            <canvas ref={canvasRef} className="w-full h-full block cursor-crosshair" />
-
-            {/* Corner Bracket Accents */}
-            <div className="absolute top-2 left-2 text-terminal-cyan text-[10px] pointer-events-none opacity-60">
-              ┌─ [VIEWPORT: 1920x1080]
-            </div>
-            <div className="absolute bottom-2 right-2 text-terminal-cyan text-[10px] pointer-events-none opacity-60">
-              [FPS: 60.0] ─┘
-            </div>
-
-            {/* Live Hover Guidance */}
-            <div className="absolute bottom-2 left-2 bg-terminal-bg/80 border border-terminal-border text-[10px] text-terminal-dim px-2 py-0.5 pointer-events-none">
-              &gt; Move pointer to steer rim angle • Click to advance spectrum
-            </div>
+            <canvas ref={canvasRef} className="block h-full w-full cursor-crosshair" />
+            <p className="pointer-events-none absolute bottom-3 left-4 text-[13px] text-muted">
+              Move the cursor to steer the light. Click to change colors.
+            </p>
           </div>
 
-          {/* Quick Preset Selector Buttons */}
-          <Card>
-            <CardHeader className="py-2.5">
-              <CardTitle className="text-xs text-slate-300">
-                <Sparkles className="w-3.5 h-3.5 text-terminal-cyan" />
-                RAPID_SHAPE_TEMPLATES
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="pt-2">
-              <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">
-                {SHAPE_TEMPLATES.map((tmpl) => (
-                  <Button
-                    key={tmpl.id}
-                    variant={svgPath === tmpl.d ? 'default' : 'terminal'}
-                    size="sm"
-                    onClick={() => {
-                      setSvgPath(tmpl.d);
-                      setViewBoxW(tmpl.viewBox[2]);
-                      setViewBoxH(tmpl.viewBox[3]);
-                      setShapeName(tmpl.name);
-                    }}
-                    className="truncate text-[10px]"
-                  >
-                    {tmpl.name}
-                  </Button>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
+          {/* Shape templates */}
+          <section aria-labelledby="templates">
+            <h2 id="templates" className="text-lg font-medium tracking-tight">
+              Templates
+            </h2>
+            <div className="mt-4 flex flex-wrap gap-2">
+              {SHAPE_TEMPLATES.map((tmpl) => (
+                <Button
+                  key={tmpl.id}
+                  variant={svgPath === tmpl.d ? 'default' : 'secondary'}
+                  size="sm"
+                  aria-pressed={svgPath === tmpl.d}
+                  onClick={() => {
+                    setSvgPath(tmpl.d);
+                    setViewBoxW(tmpl.viewBox[2]);
+                    setViewBoxH(tmpl.viewBox[3]);
+                    setShapeName(tmpl.name);
+                  }}
+                >
+                  {tmpl.name}
+                </Button>
+              ))}
+            </div>
+          </section>
 
-          {/* Export Action Bar */}
-          <Card>
-            <CardHeader className="py-2.5">
-              <CardTitle className="text-xs text-slate-300">
-                <Download className="w-3.5 h-3.5 text-terminal-green" />
-                EXPORTS &amp; TELEMETRY
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="pt-2 flex flex-wrap gap-2.5">
-              <Button
-                variant="cyber"
-                size="sm"
-                onClick={handleDownloadScene}
-                disabled={isExporting}
-                className="flex items-center gap-1.5"
-              >
-                <Download className="w-3 h-3" />
-                .GLOWFRAME.JSON
+          {/* Export */}
+          <section aria-labelledby="export">
+            <h2 id="export" className="text-lg font-medium tracking-tight">
+              Export
+            </h2>
+            <div className="mt-4 flex flex-wrap gap-2">
+              <Button size="sm" onClick={handleDownloadScene} disabled={isExporting}>
+                <Download className="h-3.5 w-3.5" />
+                .glowframe.json
               </Button>
-              <Button
-                variant="terminal"
-                size="sm"
-                onClick={handleDownloadHtml}
-                disabled={isExporting}
-                className="flex items-center gap-1.5"
-              >
-                <Download className="w-3 h-3" />
-                OFFLINE HTML ZIP
+              <Button variant="secondary" size="sm" onClick={handleDownloadHtml} disabled={isExporting}>
+                <Download className="h-3.5 w-3.5" />
+                Offline HTML zip
               </Button>
-              <Button
-                variant="amber"
-                size="sm"
-                onClick={handleDownloadPng}
-                disabled={isExporting}
-                className="flex items-center gap-1.5"
-              >
-                <Maximize2 className="w-3 h-3" />
-                CAPTURE 4K PNG
+              <Button variant="secondary" size="sm" onClick={handleDownloadPng} disabled={isExporting}>
+                <Maximize2 className="h-3.5 w-3.5" />
+                Capture 4K PNG
               </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleCopyJson}
-                className="flex items-center gap-1.5 ml-auto"
-              >
-                {copied ? <Check className="w-3 h-3 text-terminal-green" /> : <Copy className="w-3 h-3" />}
-                {copied ? 'COPIED' : 'COPY JSON'}
+              <Button variant="ghost" size="sm" onClick={handleCopyJson} className="sm:ml-auto">
+                {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+                {copied ? 'Copied' : 'Copy JSON'}
               </Button>
-            </CardContent>
-          </Card>
+            </div>
+          </section>
         </div>
 
         {/* Right Column: Shape Modulation & Optical Controls (5 Cols) */}
-        <div className="lg:col-span-5 flex flex-col gap-4">
+        <div className="flex flex-col gap-10 lg:col-span-5">
           {/* Vector Path Input & File Upload */}
-          <Card>
-            <CardHeader className="py-2.5">
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-xs text-slate-300">
-                  <Sliders className="w-3.5 h-3.5 text-terminal-cyan" />
-                  VECTOR_SPECIFICATION
-                </CardTitle>
-                <label className="cursor-pointer text-[10px] text-terminal-cyan hover:text-white flex items-center gap-1">
-                  <Upload className="w-3 h-3" />
-                  <span>UPLOAD_SVG</span>
-                  <input type="file" accept=".svg" onChange={handleFileUpload} className="hidden" />
-                </label>
-              </div>
-            </CardHeader>
-            <CardContent className="flex flex-col gap-3 pt-2">
+          <section aria-labelledby="vector" className="rounded-2xl bg-surface p-5 sm:p-6">
+            <div className="flex items-center justify-between">
+              <h2 id="vector" className="text-lg font-medium tracking-tight">
+                Shape
+              </h2>
+              <label className="flex cursor-pointer items-center gap-1.5 rounded-full text-sm text-muted transition-colors duration-fast ease-out hover:text-fg has-[:focus-visible]:outline has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-4 has-[:focus-visible]:outline-fg">
+                <Upload className="h-3.5 w-3.5" />
+                <span>Upload SVG</span>
+                <input type="file" accept=".svg" onChange={handleFileUpload} className="sr-only" />
+              </label>
+            </div>
+            <div className="mt-5 flex flex-col gap-4">
               <div>
-                <Label htmlFor="shape-name">SHAPE IDENTIFIER</Label>
+                <Label htmlFor="shape-name">Name</Label>
                 <Input
                   id="shape-name"
                   value={shapeName}
                   onChange={(e) => setShapeName(e.target.value)}
-                  prefixSymbol=">_"
-                  className="mt-1"
+                  className="mt-2"
                 />
               </div>
 
               <div>
-                <Label htmlFor="svg-path">SVG PATH STRING (`d`)</Label>
+                <Label htmlFor="svg-path">SVG path</Label>
                 <textarea
                   id="svg-path"
                   value={svgPath}
                   onChange={(e) => setSvgPath(e.target.value)}
                   rows={3}
-                  className="w-full mt-1 bg-terminal-bg border border-terminal-border p-2 text-[11px] font-mono text-slate-200 focus:outline-none focus:border-terminal-cyan resize-none"
+                  className="mt-2 w-full resize-none rounded-xl bg-raised p-3 font-mono text-[13px] text-fg outline-none transition-colors duration-fast ease-out placeholder:text-muted hover:bg-hover focus-visible:bg-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fg"
                   placeholder="M 50 15 L 85 80 L 15 80 Z"
                 />
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <Label>VIEWBOX WIDTH</Label>
+                  <Label>Viewbox width</Label>
                   <Input
                     type="number"
                     value={viewBoxW}
                     onChange={(e) => setViewBoxW(Number(e.target.value) || 100)}
-                    className="mt-1"
+                    className="mt-2"
                   />
                 </div>
                 <div>
-                  <Label>VIEWBOX HEIGHT</Label>
+                  <Label>Viewbox height</Label>
                   <Input
                     type="number"
                     value={viewBoxH}
                     onChange={(e) => setViewBoxH(Number(e.target.value) || 100)}
-                    className="mt-1"
+                    className="mt-2"
                   />
                 </div>
               </div>
-            </CardContent>
-          </Card>
+            </div>
+          </section>
 
           {/* Geometry Transformations */}
-          <Card>
-            <CardHeader className="py-2.5">
-              <CardTitle className="text-xs text-slate-300">
-                GEOMETRIC_TRANSFORMS
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="flex flex-col gap-4 pt-2">
+          <section aria-labelledby="transform" className="rounded-2xl bg-surface p-5 sm:p-6">
+            <h2 id="transform" className="text-lg font-medium tracking-tight">
+              Transform
+            </h2>
+            <div className="mt-5 flex flex-col gap-5">
               <div>
-                <div className="flex justify-between text-xs mb-1">
-                  <Label>SCALE</Label>
-                  <span className="text-terminal-cyan">{scale.toFixed(2)}x</span>
+                <div className="mb-3 flex items-center justify-between text-sm">
+                  <Label>Scale</Label>
+                  <span className="tabular-nums text-fg">{scale.toFixed(2)}x</span>
                 </div>
                 <Slider
                   min={0.08}
@@ -644,9 +524,9 @@ export default function CustomStudio({ initialScene }: CustomStudioProps) {
               </div>
 
               <div>
-                <div className="flex justify-between text-xs mb-1">
-                  <Label>ROTATION</Label>
-                  <span className="text-terminal-cyan">{rotationDeg}&deg;</span>
+                <div className="mb-3 flex items-center justify-between text-sm">
+                  <Label>Rotation</Label>
+                  <span className="tabular-nums text-fg">{rotationDeg}&deg;</span>
                 </div>
                 <Slider
                   min={0}
@@ -662,9 +542,9 @@ export default function CustomStudio({ initialScene }: CustomStudioProps) {
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <div className="flex justify-between text-xs mb-1">
-                    <Label>POS X</Label>
-                    <span className="text-terminal-cyan">{posX.toFixed(2)}</span>
+                  <div className="mb-3 flex items-center justify-between text-sm">
+                    <Label>Position X</Label>
+                    <span className="tabular-nums text-fg">{posX.toFixed(2)}</span>
                   </div>
                   <Slider
                     min={0.1}
@@ -678,9 +558,9 @@ export default function CustomStudio({ initialScene }: CustomStudioProps) {
                   />
                 </div>
                 <div>
-                  <div className="flex justify-between text-xs mb-1">
-                    <Label>POS Y</Label>
-                    <span className="text-terminal-cyan">{posY.toFixed(2)}</span>
+                  <div className="mb-3 flex items-center justify-between text-sm">
+                    <Label>Position Y</Label>
+                    <span className="tabular-nums text-fg">{posY.toFixed(2)}</span>
                   </div>
                   <Slider
                     min={0.1}
@@ -694,21 +574,19 @@ export default function CustomStudio({ initialScene }: CustomStudioProps) {
                   />
                 </div>
               </div>
-            </CardContent>
-          </Card>
+            </div>
+          </section>
 
           {/* Optics & Atmospheric Glow Falloff */}
-          <Card>
-            <CardHeader className="py-2.5">
-              <CardTitle className="text-xs text-slate-300">
-                OPTICAL_RADIANCE &amp; GLOW
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="flex flex-col gap-4 pt-2">
+          <section aria-labelledby="glow" className="rounded-2xl bg-surface p-5 sm:p-6">
+            <h2 id="glow" className="text-lg font-medium tracking-tight">
+              Glow
+            </h2>
+            <div className="mt-5 flex flex-col gap-5">
               <div>
-                <div className="flex justify-between text-xs mb-1">
-                  <Label>RIM CORE THICKNESS</Label>
-                  <span className="text-terminal-cyan">{(edgeWidth * 1000).toFixed(1)} px</span>
+                <div className="mb-3 flex items-center justify-between text-sm">
+                  <Label>Rim thickness</Label>
+                  <span className="tabular-nums text-fg">{(edgeWidth * 1000).toFixed(1)} px</span>
                 </div>
                 <Slider
                   min={0.001}
@@ -723,9 +601,9 @@ export default function CustomStudio({ initialScene }: CustomStudioProps) {
               </div>
 
               <div>
-                <div className="flex justify-between text-xs mb-1">
-                  <Label>ATMOSPHERIC FALLOFF</Label>
-                  <span className="text-terminal-amber">{falloff.toFixed(3)}</span>
+                <div className="mb-3 flex items-center justify-between text-sm">
+                  <Label>Falloff</Label>
+                  <span className="tabular-nums text-fg">{falloff.toFixed(3)}</span>
                 </div>
                 <Slider
                   min={0.01}
@@ -740,9 +618,9 @@ export default function CustomStudio({ initialScene }: CustomStudioProps) {
               </div>
 
               <div>
-                <div className="flex justify-between text-xs mb-1">
-                  <Label>GLOW INTENSITY</Label>
-                  <span className="text-terminal-cyan">{intensity.toFixed(2)}x</span>
+                <div className="mb-3 flex items-center justify-between text-sm">
+                  <Label>Intensity</Label>
+                  <span className="tabular-nums text-fg">{intensity.toFixed(2)}x</span>
                 </div>
                 <Slider
                   min={0.5}
@@ -757,9 +635,9 @@ export default function CustomStudio({ initialScene }: CustomStudioProps) {
               </div>
 
               <div>
-                <div className="flex justify-between text-xs mb-1">
-                  <Label>CHROMATIC DISPERSION</Label>
-                  <span className="text-terminal-green">{(dispersion * 100).toFixed(0)}%</span>
+                <div className="mb-3 flex items-center justify-between text-sm">
+                  <Label>Dispersion</Label>
+                  <span className="tabular-nums text-fg">{(dispersion * 100).toFixed(0)}%</span>
                 </div>
                 <Slider
                   min={0.0}
@@ -774,10 +652,10 @@ export default function CustomStudio({ initialScene }: CustomStudioProps) {
               </div>
 
               <div>
-                <div className="flex justify-between text-xs mb-1">
-                  <Label>ROTATION SPEED</Label>
-                  <span className="text-terminal-cyan">
-                    {rotationSpeed === 0 ? 'FROZEN' : `${rotationSpeed.toFixed(3)}x`}
+                <div className="mb-3 flex items-center justify-between text-sm">
+                  <Label>Rotation speed</Label>
+                  <span className="tabular-nums text-fg">
+                    {rotationSpeed === 0 ? 'Frozen' : `${rotationSpeed.toFixed(3)}x`}
                   </span>
                 </div>
                 <Slider
@@ -790,78 +668,74 @@ export default function CustomStudio({ initialScene }: CustomStudioProps) {
                     if (v !== undefined) setRotationSpeed(v);
                   }}
                 />
-                <div className="flex gap-1.5 mt-2">
+                <div className="mt-3 flex gap-1.5">
                   <button
                     onClick={() => setRotationSpeed(0)}
-                    className="px-2 py-0.5 text-[9px] border border-terminal-border bg-terminal-card text-terminal-dim hover:text-white"
+                    className="h-7 rounded-full bg-raised px-3 text-[13px] text-muted transition-colors duration-fast ease-out hover:bg-hover hover:text-fg"
                   >
-                    [FREEZE]
+                    Freeze
                   </button>
                   <button
                     onClick={() => setRotationSpeed(0.02)}
-                    className="px-2 py-0.5 text-[9px] border border-terminal-border bg-terminal-card text-terminal-dim hover:text-white"
+                    className="h-7 rounded-full bg-raised px-3 text-[13px] text-muted transition-colors duration-fast ease-out hover:bg-hover hover:text-fg"
                   >
-                    [SLOW]
+                    Slow
                   </button>
                   <button
                     onClick={() => setRotationSpeed(0.05)}
-                    className="px-2 py-0.5 text-[9px] border border-terminal-border bg-terminal-card text-terminal-dim hover:text-white"
+                    className="h-7 rounded-full bg-raised px-3 text-[13px] text-muted transition-colors duration-fast ease-out hover:bg-hover hover:text-fg"
                   >
-                    [NORMAL]
+                    Normal
                   </button>
                   <button
                     onClick={() => setRotationSpeed(0.12)}
-                    className="px-2 py-0.5 text-[9px] border border-terminal-border bg-terminal-card text-terminal-dim hover:text-white"
+                    className="h-7 rounded-full bg-raised px-3 text-[13px] text-muted transition-colors duration-fast ease-out hover:bg-hover hover:text-fg"
                   >
-                    [FAST]
+                    Fast
                   </button>
                 </div>
               </div>
 
               {/* Color Palette & Custom Picker */}
               <div>
-                <div className="flex items-center justify-between mb-2">
-                  <Label>SPECTRUM PALETTES</Label>
+                <div className="mb-3 flex items-center justify-between">
+                  <Label>Palette</Label>
                   <button
                     onClick={() => setUseCustomColors(!useCustomColors)}
-                    className={`text-[10px] px-2 py-0.5 border transition-all ${
-                      useCustomColors
-                        ? 'border-terminal-cyan bg-terminal-cyan/15 text-terminal-cyan'
-                        : 'border-terminal-border text-terminal-dim hover:text-slate-200'
+                    aria-pressed={useCustomColors}
+                    className={`h-7 rounded-full px-3 text-[13px] transition-colors duration-fast ease-out ${
+                      useCustomColors ? 'bg-fg text-bg' : 'bg-raised text-muted hover:bg-hover hover:text-fg'
                     }`}
                   >
-                    {useCustomColors ? '[CUSTOM COLOR: ON]' : '[PICK CUSTOM COLOR]'}
+                    Custom colors
                   </button>
                 </div>
 
                 {useCustomColors ? (
-                  <div className="p-3 border border-terminal-cyan/40 bg-terminal-cyan/5 flex flex-col gap-3">
-                    <div className="text-[10px] text-terminal-cyan font-semibold">
-                      CUSTOM GLOW COLOR PICKER
-                    </div>
+                  <div className="flex flex-col gap-3 rounded-xl bg-raised p-4">
                     <div className="grid grid-cols-2 gap-3">
                       <div>
-                        <Label className="text-[10px] block mb-1">PRIMARY GLOW</Label>
+                        <Label className="mb-2 block">Primary</Label>
                         <div className="flex items-center gap-2">
                           <input
                             type="color"
                             value={customColor1}
                             onChange={(e) => setCustomColor1(e.target.value)}
-                            className="w-8 h-8 rounded border border-terminal-border cursor-pointer bg-transparent"
+                            className="h-8 w-8 cursor-pointer rounded-lg bg-transparent"
                           />
-                          <span className="text-xs font-mono text-slate-300">{customColor1}</span>
+                          <span className="font-mono text-[13px] text-muted">{customColor1}</span>
                         </div>
                       </div>
                       <div>
-                        <Label className="text-[10px] block mb-1">SECONDARY AURORA</Label>
+                        <Label className="mb-2 block">Secondary</Label>
                         <div className="flex items-center gap-2">
                           <input
                             type="color"
                             value={customColor2}
                             onChange={(e) => setCustomColor2(e.target.value)}
-                            className="w-8 h-8 rounded border border-terminal-border cursor-pointer bg-transparent"
+                            className="h-8 w-8 cursor-pointer rounded-lg bg-transparent"
                           />
-                          <span className="text-xs font-mono text-slate-300">{customColor2}</span>
+                          <span className="font-mono text-[13px] text-muted">{customColor2}</span>
                         </div>
                       </div>
                     </div>
@@ -875,18 +749,19 @@ export default function CustomStudio({ initialScene }: CustomStudioProps) {
                           setSelectedPaletteIdx(idx);
                           setUseCustomColors(false);
                         }}
-                        className={`p-2 border text-left flex flex-col gap-1.5 transition-all ${
+                        aria-pressed={selectedPaletteIdx === idx && !useCustomColors}
+                        className={`flex flex-col gap-2 rounded-xl p-3 text-left transition-colors duration-fast ease-out ${
                           selectedPaletteIdx === idx && !useCustomColors
-                            ? 'border-terminal-cyan bg-terminal-cyan/10 shadow-terminal-glow'
-                            : 'border-terminal-border hover:border-slate-500 bg-terminal-bg'
+                            ? 'bg-line'
+                            : 'bg-raised hover:bg-hover'
                         }`}
                       >
-                        <div className="text-[10px] text-slate-300 truncate">{p.name}</div>
+                        <div className="truncate text-[13px] text-fg">{p.name}</div>
                         <div className="flex items-center gap-1">
                           {p.colors.slice(0, 4).map((c, i) => (
                             <div
                               key={i}
-                              className="w-3 h-3 rounded-full border border-black/40"
+                              className="h-3.5 w-3.5 rounded-full"
                               style={{ backgroundColor: c }}
                             />
                           ))}
@@ -896,8 +771,8 @@ export default function CustomStudio({ initialScene }: CustomStudioProps) {
                   </div>
                 )}
               </div>
-            </CardContent>
-          </Card>
+            </div>
+          </section>
         </div>
       </div>
     </div>

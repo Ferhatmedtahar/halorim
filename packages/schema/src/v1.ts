@@ -80,6 +80,20 @@ export const SvgPathShapeSchema = z
   .object({
     type: z.literal('svg-path'),
     d: z.string().min(1).describe('SVG path data string (d attribute)'),
+    fillHoles: z
+      .boolean()
+      .optional()
+      .describe(
+        'Treat the artwork as a solid silhouette: interior details (eyes, belly, counters enclosed by the outline) are filled and get no rim light. Only the outer outline glows.',
+      ),
+    closeGaps: z
+      .number()
+      .min(0)
+      .max(200)
+      .optional()
+      .describe(
+        'Closing radius in texture pixels (1024 grid). Gaps and notches narrower than twice this value are sealed, so the glow follows the outer envelope instead of lighting empty space inside the artwork.',
+      ),
     viewBox: z
       .tuple([
         z.number().describe('viewBox min-x'),
@@ -96,6 +110,20 @@ export const SvgFileShapeSchema = z
   .object({
     type: z.literal('svg-file'),
     asset: z.string().min(1).describe('Relative path or asset identifier for the SVG file'),
+    closeGaps: z
+      .number()
+      .min(0)
+      .max(200)
+      .optional()
+      .describe(
+        'Closing radius in texture pixels (1024 grid). Gaps and notches narrower than twice this value are sealed, so the glow follows the outer envelope instead of lighting empty space inside the artwork.',
+      ),
+    fillHoles: z
+      .boolean()
+      .optional()
+      .describe(
+        'Treat the artwork as a solid silhouette: interior details (eyes, belly, counters enclosed by the outline) are filled and get no rim light. Only the outer outline glows.',
+      ),
     viewBox: z
       .tuple([z.number(), z.number(), z.number().positive(), z.number().positive()])
       .optional()
@@ -194,6 +222,12 @@ export const EdgeSchema = z
       .max(2.0)
       .default(0.35)
       .describe('Prism dispersion spread along the perimeter'),
+    colorFlow: z
+      .enum(['radial', 'surface'])
+      .default('radial')
+      .describe(
+        'How prism colors are assigned. "radial": by angle around the shape center (best for single convex shapes). "surface": by position on the shape surface, so every part of a multi-part or concave logo carries its own continuous gradient.',
+      ),
   })
   .describe('Rim glow and light emission properties');
 
