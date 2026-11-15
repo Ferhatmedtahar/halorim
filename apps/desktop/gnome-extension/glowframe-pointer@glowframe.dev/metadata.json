@@ -1,0 +1,7 @@
+{
+  "uuid": "glowframe-pointer@glowframe.dev",
+  "name": "Glowframe Desktop Bridge",
+  "description": "Shows the Glowframe live wallpaper as the real GNOME background (desktop, overview, workspace switching) under the desktop icons, and tells it where the mouse is. Does nothing while Glowframe is not running.",
+  "shell-version": ["45", "46", "47", "48", "49", "50"],
+  "version": 2
+}
