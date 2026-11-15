@@ -1,4 +1,5 @@
 pub mod background;
+pub mod gnome_bridge;
 pub mod linux_host;
 mod tray;
 pub mod windows_host;

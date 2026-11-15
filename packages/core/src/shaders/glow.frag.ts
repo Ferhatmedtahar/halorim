@@ -96,7 +96,8 @@ float cursorBeamAt(float angle, vec2 bp, vec2 nrm, vec2 cLocal) {
   if (u_colorFlow == 1) {
     vec2 toC = cLocal - bp;
     float dc = length(toC);
-    vec2 dirC = dc > 0.0001 ? toC / dc : vec2(0.0);
+    // Softened direction: fades out smoothly (instead of flipping) when the cursor touches the outline.
+    vec2 dirC = toC / sqrt(dc * dc + 0.0036);
     float facing = pow(max(dot(nrm, dirC), 0.0), max(u_cursorSharpness, 1.0));
     return facing * (0.35 + 0.65 * exp(-dc * 0.9));
   }
@@ -180,29 +181,19 @@ void main() {
     haveEnv = true;
     d = dLocal * safeScale;
 
-    float eps = 1.0 / 1024.0;
-    float dR = texture(u_sdf, sampleUv + vec2(eps, 0.0)).r;
-    float dL = texture(u_sdf, sampleUv - vec2(eps, 0.0)).r;
-    float dU = texture(u_sdf, sampleUv + vec2(0.0, eps)).r;
-    float dD = texture(u_sdf, sampleUv - vec2(0.0, eps)).r;
-    vec2 grad = vec2(dR - dL, dU - dD);
-    float gLen = length(grad);
+    // Wide-support gradient of the envelope field: a stable outward direction for the cursor light.
+    // (A 1-texel difference of a bilinearly filtered field is piecewise constant and shows up as
+    // blocky, dotted light; it is never used.)
     vec2 radialNormal = r > 0.00001 ? p / r : vec2(0.0, 1.0);
-    vec2 edtNormal = gLen > 0.00001 ? grad / gLen : radialNormal;
-    // Wide-support gradient: stable direction for color and cursor light (no ray streaks from
-    // tiny concavities in the outline).
     float we = 10.0 / 1024.0;
     vec2 wgrad = vec2(
       texture(u_sdf, sampleUv + vec2(we, 0.0)).g - texture(u_sdf, sampleUv - vec2(we, 0.0)).g,
       texture(u_sdf, sampleUv + vec2(0.0, we)).g - texture(u_sdf, sampleUv - vec2(0.0, we)).g
     );
     float wLen = length(wgrad);
-    smoothNormal = wLen > 0.00001 ? wgrad / wLen : edtNormal;
+    smoothNormal = wLen > 0.00001 ? wgrad / wLen : radialNormal;
     haveSmooth = true;
-    float radialBlend = smoothstep(0.47, 0.62, r);
-    vec2 blended = mix(edtNormal, radialNormal, radialBlend);
-    float bLen = length(blended);
-    shapeNormal = bLen > 0.00001 ? blended / bLen : radialNormal;
+    shapeNormal = smoothNormal;
   }
 
   // Edge perimeter angle around shape center
@@ -215,13 +206,14 @@ void main() {
   if (!haveEnv) dEnvLocal = d / safeScale;
   float outsideLocal = max(dEnvLocal, 0.0);
   float farBlend = smoothstep(0.0, 0.12, outsideLocal);
-  vec2 bpExact = p - (haveSmooth ? smoothNormal : shapeNormal) * dEnvLocal;
-  vec2 bp = mix(bpExact, p, farBlend);
   vec2 radialDir = length(p) > 0.00001 ? normalize(p) : vec2(0.0, 1.0);
   vec2 baseNormal = haveSmooth ? smoothNormal : shapeNormal;
   vec2 flowNormal = mix(baseNormal, radialDir, farBlend);
   float fnLen = length(flowNormal);
   flowNormal = fnLen > 0.00001 ? flowNormal / fnLen : radialDir;
+  // The outline point this pixel's light belongs to: walk back along the (smoothed) outward
+  // direction. Exact next to the outline, a radial projection far away, continuous in between.
+  vec2 bp = p - flowNormal * outsideLocal;
   vec2 cLocal = toLocal(u_cursorPos, aspect, safeScale);
 
   float normAngle;
@@ -230,12 +222,13 @@ void main() {
     // Surface flow: color is a function of WHERE on the outline you are, not of the angle around
     // the shape center. Every pane/limb/ring of a logo carries its own continuous gradient and
     // nothing converges to a single point.
-    float qLen = length(bp);
-    vec2 qf = qLen > 0.42 ? bp * (0.42 / qLen) : bp; // never repeat the palette outside the shape
+    // Soft radial saturation (tanh) instead of a hard clamp: the palette never repeats outside the
+    // shape and there is no crease where the clamp used to start.
+    float qLen = length(p);
+    vec2 qf = p * (0.42 * tanh(qLen / 0.42) / max(qLen, 0.00001));
     float spin = u_time * u_rotationSpeed * 6.28318530718;
     vec2 dirSpin = vec2(cos(spin), sin(spin));
-    float nAng = atan(flowNormal.y, flowNormal.x);
-    normAngle = fract(dot(qf, dirSpin) * 1.45 + 0.5 + u_hueShift + 0.10 * nAng / 6.28318530718);
+    normAngle = fract(dot(qf, dirSpin) * 1.45 + 0.5 + u_hueShift);
     posAngle = fract(dot(qf, vec2(0.6, 0.8)) * 1.45 + 0.5);
   } else {
     normAngle = fract((angle / 6.28318530718) + 0.5 + u_time * u_rotationSpeed + u_hueShift);
@@ -323,7 +316,8 @@ void main() {
   float nearBand = pow(nearFade, 2.8);
   // 3. Two-stage exponential far radiance expanding naturally into the black void
   float farStage1 = exp(-dg * 13.0) * 0.35;
-  float farStage2 = exp(-dg * 3.8) * 0.14;
+  // Wide atmosphere: windowed so it reaches true black instead of hazing the whole screen.
+  float farStage2 = exp(-dg * 5.0) * 0.09 * (1.0 - smoothstep(0.30, 0.90, dg));
   float farGlow = farStage1 + farStage2;
 
   // Soft glow is zero in gaps/holes (inside the envelope but outside the artwork) and fades where
@@ -357,27 +351,28 @@ void main() {
     outAlpha = 1.0;
   } else {
     linearColor = u_bgColor + (edgeColor * rimProfile);
-    float glowBrightness = max(linearColor.r, max(linearColor.g, linearColor.b));
-    outAlpha = clamp(glowBrightness * 3.0, 0.0, 1.0);
   }
 
   // Screen-edge vertical fade
   float vertDist = min(v_uv.y, 1.0 - v_uv.y);
   float screenEdgeFade = sqrt(clamp(vertDist / 0.15, 0.0, 1.0));
   linearColor *= screenEdgeFade;
-  outAlpha *= screenEdgeFade;
 
   linearColor = clamp(linearColor, 0.0, 1.0);
 
   // Gamma correction to sRGB
   vec3 srgb = pow(linearColor, vec3(1.0 / 2.2));
 
-  // Dither in sRGB space on outside rim/background to eliminate banding without lifting true black
-  if (d >= 0.0 && dot(srgb, vec3(1.0)) > 0.001) {
-    float dither = (fract(sin(dot(gl_FragCoord.xy, vec2(12.9898, 78.233))) * 43758.5453) - 0.5) / 255.0;
-    srgb = clamp(srgb + vec3(dither), 0.0, 1.0);
+  // Triangular-PDF dither (+-1 LSB) in sRGB space: removes banding in the long, dark glow gradients
+  // without lifting true black.
+  if (dot(srgb, vec3(1.0)) > 0.001) {
+    float n1 = fract(sin(dot(gl_FragCoord.xy, vec2(12.9898, 78.233))) * 43758.5453);
+    float n2 = fract(sin(dot(gl_FragCoord.xy + vec2(31.7, 17.3), vec2(39.3468, 11.135))) * 24634.6345);
+    srgb = clamp(srgb + vec3((n1 + n2 - 1.0) / 255.0), 0.0, 1.0);
   }
 
+  // Always opaque. A glow-derived alpha gets multiplied into the color by the compositor, which
+  // crushes the soft falloff and quantizes it into visible bands.
   fragColor = vec4(srgb, outAlpha);
 }
 `;

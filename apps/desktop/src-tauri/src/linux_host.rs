@@ -265,15 +265,10 @@ pub fn configure_linux_window(
                 // The wallpaper is fully opaque: no RGBA visual, so the compositor does not have to
                 // alpha-blend two full-screen windows on every frame.
 
-                // Configure input region covering central interactive area around the glowing shape
-                // This leaves top bar, dock, and outer desktop icon margins 100% interactive and clickable
-                let rect = gtk::cairo::RectangleInt::new(
-                    (width as f64 * 0.22) as i32,
-                    (height as f64 * 0.25) as i32,
-                    (width as f64 * 0.56) as i32,
-                    (height as f64 * 0.62) as i32,
-                );
-                let region = gtk::cairo::Region::create_rectangle(&rect);
+                // Fully click-through: an empty input region. The pointer position comes from the
+                // GNOME Shell bridge (or from X11 itself), never from events on this window, so the
+                // wallpaper can not swallow clicks meant for desktop icons, whatever the stacking.
+                let region = gtk::cairo::Region::create();
                 gtk_win.input_shape_combine_region(Some(&region));
                 if let Some(gdk_win) = gtk_win.window() {
                     gdk_win.lower();
@@ -407,79 +402,26 @@ pub fn start_desktop_monitor(
             }
         });
 
-        // 2. High-performance dedicated OS polling thread for live cursor & battery saver
+        // 2. Pointer source. On GNOME the Shell bridge reports the pointer (XWayland only sees it
+        //    while it is over an X11 window, i.e. almost never once desktop icons are on top).
+        //    Everywhere else X11 is asked directly.
+        let bridge = crate::gnome_bridge::start(app.clone(), monitors.clone());
+        let poll_x11 = bridge == crate::gnome_bridge::BridgeStatus::Unavailable;
+
+        // 3. Background thread: X11 pointer polling (when needed) and the battery saver check.
         let app_handle = app.clone();
         std::thread::spawn(move || {
-            let x11_query = X11PointerQuery::open();
-            let mut active_monitor_idx: Option<usize> = None;
-            let mut last_x = -1.0;
-            let mut last_y = -1.0;
-            let mut was_down = false;
+            let x11_query = if poll_x11 { X11PointerQuery::open() } else { None };
+            let mut tracker = crate::gnome_bridge::PointerTracker::default();
             let mut was_paused = false;
             let mut check_counter = 0;
 
             while !stop_signal.load(Ordering::Relaxed) {
                 if let Some(ref query) = x11_query {
                     if let Some((x, y, is_down)) = query.query() {
-                        if let Some((m_idx, norm_x, norm_y)) = map_pointer_to_monitor(x, y, &monitors) {
-                            if let Some(prev_idx) = active_monitor_idx {
-                                if prev_idx != m_idx {
-                                    last_x = -1.0;
-                                    last_y = -1.0;
-                                    let leave_payload = CursorPayload {
-                                        monitor: prev_idx,
-                                        x: 0.0,
-                                        y: 0.0,
-                                    };
-                                    let prev_label = format!("wallpaper-{}", prev_idx);
-                                    if let Some(win) = app_handle.get_webview_window(&prev_label) {
-                                        let _ = win.emit("glowframe://cursor-leave", leave_payload.clone());
-                                    }
-                                    let _ = app_handle.emit("glowframe://cursor-leave", leave_payload);
-                                }
-                            }
-                            active_monitor_idx = Some(m_idx);
-
-                            if (norm_x - last_x).abs() > 0.0005 || (norm_y - last_y).abs() > 0.0005 {
-                                let payload = CursorPayload {
-                                    monitor: m_idx,
-                                    x: norm_x,
-                                    y: norm_y,
-                                };
-                                let target_label = format!("wallpaper-{}", m_idx);
-                                if let Some(win) = app_handle.get_webview_window(&target_label) {
-                                    let _ = win.emit("glowframe://cursor-move", payload.clone());
-                                }
-                                let _ = app_handle.emit("glowframe://cursor-move", payload);
-                                last_x = norm_x;
-                                last_y = norm_y;
-                            }
-
-                            if is_down && !was_down {
-                                let payload = CursorPayload {
-                                    monitor: m_idx,
-                                    x: norm_x,
-                                    y: norm_y,
-                                };
-                                let target_label = format!("wallpaper-{}", m_idx);
-                                if let Some(win) = app_handle.get_webview_window(&target_label) {
-                                    let _ = win.emit("glowframe://cursor-down", payload.clone());
-                                }
-                                let _ = app_handle.emit("glowframe://cursor-down", payload);
-                            }
-                            was_down = is_down;
-                        } else if let Some(prev_idx) = active_monitor_idx.take() {
-                            let leave_payload = CursorPayload {
-                                monitor: prev_idx,
-                                x: 0.0,
-                                y: 0.0,
-                            };
-                            let prev_label = format!("wallpaper-{}", prev_idx);
-                            if let Some(win) = app_handle.get_webview_window(&prev_label) {
-                                let _ = win.emit("glowframe://cursor-leave", leave_payload.clone());
-                            }
-                            let _ = app_handle.emit("glowframe://cursor-leave", leave_payload);
-                        }
+                        let target = map_pointer_to_monitor(x, y, &monitors);
+                        let events = tracker.update(target, is_down, true);
+                        crate::gnome_bridge::emit_pointer_events(&app_handle, &events);
                     }
                 }
 

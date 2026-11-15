@@ -168,7 +168,8 @@ function scheduleSnapshot() {
   clearTimeout(snapshotTimer);
   snapshotTimer = setTimeout(() => {
     try {
-      renderer.renderFrame(4000);
+      // The drawing buffer is preserved, so the frame on screen is captured as it is. (Rendering a
+      // special frame for the snapshot made the live wallpaper visibly jump.)
       canvas.toBlob((blob) => {
         if (!blob) return;
         void blob.arrayBuffer().then((buf) =>
@@ -264,38 +265,45 @@ listen<{ paused: boolean }>('glowframe://set-paused', (event) => {
 }).catch(() => {});
 
 // --- Never let the wallpaper stay frozen ---------------------------------------------------------
-// Workspace switches, GPU hiccups and compositor hide/show can stop the animation loop. Resume as
-// soon as the page is visible again, and restart the loop if frames stop advancing.
+// The wallpaper is shown by the compositor in places the webview knows nothing about (Activities
+// overview, workspace switching, under the desktop icons), so "page hidden" is never a reason to
+// stop drawing: only an explicit pause (tray, battery saver) is.
 function resumeRendering() {
-  hostInput.emitVisibilityChange(document.visibilityState === 'visible');
+  hostInput.emitVisibilityChange(true);
   renderer.setPaused(externallyPaused);
 }
 document.addEventListener('visibilitychange', resumeRendering);
 window.addEventListener('focus', resumeRendering);
 window.addEventListener('pageshow', resumeRendering);
 
+// If the browser stops delivering animation frames (it may when it believes the page is hidden),
+// keep drawing from a timer so the picture never freezes.
+const PUMP_INTERVAL_MS = 1000 / 30;
 let lastSeenTime = -1;
-let stalledChecks = 0;
+let stalledTicks = 0;
 setInterval(() => {
-  if (externallyPaused || document.visibilityState !== 'visible') {
-    stalledChecks = 0;
+  if (externallyPaused) {
+    stalledTicks = 0;
     return;
   }
   const t = renderer.getUniformValues().u_time;
-  if (t === lastSeenTime) {
-    stalledChecks++;
-    if (stalledChecks >= 2) {
-      renderer.stop();
-      renderer.start();
-      renderer.setPaused(false);
-      hostInput.emitVisibilityChange(true);
-      stalledChecks = 0;
-    }
-  } else {
-    stalledChecks = 0;
+  if (t !== lastSeenTime) {
+    lastSeenTime = t;
+    stalledTicks = 0;
+    return;
   }
-  lastSeenTime = t;
-}, 1500);
+  stalledTicks++;
+  if (stalledTicks < 4) return; // ~130 ms without a frame
+  if (stalledTicks === 4) {
+    hostLog('info', `animation frames stalled (visibility=${document.visibilityState}), drawing from timer`);
+    // Re-arm the normal loop; it takes over again as soon as frames come back.
+    renderer.stop();
+    renderer.start();
+    resumeRendering();
+  }
+  renderer.renderFrame(performance.now());
+  lastSeenTime = renderer.getUniformValues().u_time;
+}, PUMP_INTERVAL_MS);
 
 listen<{ fps: number }>('glowframe://set-fps-cap', (event) => {
   renderer.setFpsCap(event.payload.fps);
