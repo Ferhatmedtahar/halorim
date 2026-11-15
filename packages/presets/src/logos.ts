@@ -79,7 +79,7 @@ export function createLogoScene(def: LogoDef): Scene {
     interaction: {
       followCursor: true,
       sharpness: 3.5,
-      smoothing: 0.6,
+      smoothing: 0.04,
       idleOrbit: false,
       idleTimeoutMs: 1500,
     },

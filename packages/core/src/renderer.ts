@@ -482,9 +482,13 @@ export function createRenderer(options: RendererOptions): Renderer {
 
     const isInside = pointerActive && isPointerInsideShape(targetPointerX, targetPointerY);
 
+    // `smoothing` is the share of the remaining distance covered per 60 Hz frame. Applied per elapsed
+    // time so the cursor light glides at the same speed whatever the refresh rate.
     const smoothing = currentScene.interaction.smoothing;
-    currentPointerX += (targetPointerX - currentPointerX) * smoothing;
-    currentPointerY += (targetPointerY - currentPointerY) * smoothing;
+    const follow =
+      smoothing >= 1 ? 1 : 1 - Math.pow(1 - smoothing, Math.min(dt, 0.25) * 60);
+    currentPointerX += (targetPointerX - currentPointerX) * follow;
+    currentPointerY += (targetPointerY - currentPointerY) * follow;
 
     const hasCursor =
       isExplicitOrbitMode ||
@@ -498,8 +502,11 @@ export function createRenderer(options: RendererOptions): Renderer {
     const dx = (currentPointerX - shapeX) * aspect;
     const dy = currentPointerY - shapeY;
 
-    // Hover is active ONLY when pointer is active AND outside the shape
-    const hoverTarget = pointerActive && !isInside ? 1.0 : 0.0;
+    // Hover is active while the pointer is outside the shape and has moved recently; after
+    // HOVER_HOLD_MS without movement the wallpaper eases back to its idle animation.
+    const HOVER_HOLD_MS = 3000;
+    const hoverTarget =
+      pointerActive && !isInside && timeSinceLastPointer < HOVER_HOLD_MS ? 1.0 : 0.0;
     const hoverAlpha = dt > 0 ? 1.0 - Math.exp(-dt / 0.25) : 1.0;
     hoverTransition += (hoverTarget - hoverTransition) * hoverAlpha;
     hoverTransition = Math.max(0, Math.min(1, hoverTransition));

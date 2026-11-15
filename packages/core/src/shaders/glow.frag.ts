@@ -90,20 +90,15 @@ vec2 toLocal(vec2 uv, float aspect, float safeScale) {
   return rot / safeScale;
 }
 
-// Cursor-facing brightness. Radial flow: angular lobe around the center (original look).
-// Surface flow: the outline brightens where its normal faces the cursor, attenuated by distance.
-float cursorBeamAt(float angle, vec2 bp, vec2 nrm, vec2 cLocal) {
-  if (u_colorFlow == 1) {
-    vec2 toC = cLocal - bp;
-    float dc = length(toC);
-    // Softened direction: fades out smoothly (instead of flipping) when the cursor touches the outline.
-    vec2 dirC = toC / sqrt(dc * dc + 0.0036);
-    float facing = pow(max(dot(nrm, dirC), 0.0), max(u_cursorSharpness, 1.0));
-    return facing * (0.35 + 0.65 * exp(-dc * 0.9));
-  }
-  float angleDiff = abs(angle - u_lightAngle);
-  if (angleDiff > 3.14159265) angleDiff = 6.2831853 - angleDiff;
-  return pow(max(cos(angleDiff), 0.0), 3.0);
+// Cursor light: the outline brightens only where it faces the cursor, strongest on the part closest
+// to it. Edges facing away stay dark, so the light clearly follows the pointer around the shape.
+float cursorBeamAt(vec2 bp, vec2 nrm, vec2 cLocal) {
+  vec2 toC = cLocal - bp;
+  float dc = length(toC);
+  // Softened direction: fades out smoothly (instead of flipping) when the cursor touches the outline.
+  vec2 dirC = toC / sqrt(dc * dc + 0.0036);
+  float facing = pow(max(dot(nrm, dirC), 0.0), max(u_cursorSharpness, 1.0) * 1.6);
+  return facing * (0.30 + 0.70 * exp(-dc * 1.8));
 }
 
 float dLocalForGap(float d, float safeScale) { return d / safeScale; }
@@ -273,23 +268,16 @@ void main() {
     float p2 = exp(-(d2 * d2) / max(2.0 * w2 * w2, 0.001)) * f2;
 
     float multiBand = max(p0, max(p1, p2));
-    float idleLight = mix(0.10, 0.85, multiBand);
-
-    // Hover beam focusing toward cursor
-    float cursorBeam = cursorBeamAt(angle, bp, flowNormal, cLocal);
-    float activeCursorLight = mix(0.10, 0.90, cursorBeam);
-
-    perimeterLight = mix(idleLight, activeCursorLight, u_hoverTransition);
-  } else if (u_hoverTransition > 0.001) {
-    float cursorBeam = cursorBeamAt(angle, bp, flowNormal, cLocal);
-    perimeterLight = mix(0.12, 1.0, cursorBeam);
+    perimeterLight = mix(0.12, 0.70, multiBand);
+  } else {
+    perimeterLight = 0.45;
   }
+  // Hover: light comes only from the cursor (computed whenever hover is fading in or out).
+  float cursorBeam = u_hoverTransition > 0.001 ? cursorBeamAt(bp, flowNormal, cLocal) : 0.0;
+  float hoverLight = mix(0.02, 1.0, cursorBeam);
 
-  // Active edge illumination: purely on the shape perimeter (no cursor light blob)
-  float edgeLight = perimeterLight;
-
-  // Mode modulations
-  edgeLight = edgeLight * u_pulseFactor * u_flickerFactor + u_burstFactor;
+  // Mode modulations (idle animation only; the cursor light stays steady)
+  float edgeLight = perimeterLight * u_pulseFactor * u_flickerFactor + u_burstFactor;
 
   // Sweep highlight beam
   if (u_sweep.w > 0.5) {
@@ -314,11 +302,11 @@ void main() {
   float nearOuter = max(u_edgeFalloff, 0.018);
   float nearFade = clamp(1.0 - dg / nearOuter, 0.0, 1.0);
   float nearBand = pow(nearFade, 2.8);
-  // 3. Two-stage exponential far radiance expanding naturally into the black void
-  float farStage1 = exp(-dg * 13.0) * 0.35;
-  // Wide atmosphere: windowed so it reaches true black instead of hazing the whole screen.
-  float farStage2 = exp(-dg * 5.0) * 0.09 * (1.0 - smoothstep(0.30, 0.90, dg));
-  float farGlow = farStage1 + farStage2;
+  // 3. Idle: a tight halo hugging the outline. Hover: a longer glow that reaches toward the cursor
+  //    (pixels between the shape and the cursor face it, so the beam lights them).
+  float idleGlow = nearBand * 0.30 + exp(-dg * 30.0) * 0.20 + exp(-dg * 12.0) * 0.05;
+  float hoverGlow = nearBand * 0.50 + exp(-dg * 14.0) * 0.38 +
+    exp(-dg * 5.0) * 0.10 * (1.0 - smoothstep(0.30, 0.90, dg));
 
   // Soft glow is zero in gaps/holes (inside the envelope but outside the artwork) and fades where
   // the nearest real edge is much farther away than the envelope (sealed notches), so no plasma
@@ -326,9 +314,11 @@ void main() {
   float gapDepth = max(dLocalForGap(d, safeScale) - dEnvLocal, 0.0);
   float sealed = 1.0 - smoothstep(0.03, 0.14, gapDepth);
   float inGap = smoothstep(-0.003, -0.008, dEnvLocal);
-  float softGlow = (nearBand * 0.45 + farGlow) * sealed * (1.0 - inGap);
-  float rimLine = core * 0.55;
-  float rimProfile = (softGlow + rimLine) * u_edgeIntensity * edgeLight;
+  float glowMask = sealed * (1.0 - inGap);
+  float hover = u_hoverTransition;
+  float idlePart = (idleGlow * glowMask + core * 0.55) * edgeLight;
+  float hoverPart = (hoverGlow * glowMask + core * 0.70) * hoverLight;
+  float rimProfile = mix(idlePart, hoverPart, hover) * u_edgeIntensity;
 
   // Inside vs outside composition
   vec3 linearColor;
