@@ -3,19 +3,13 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import type { Scene } from '@glowframe/schema';
 import { parseScene } from '@glowframe/schema';
-import { exportPng, exportSceneJson, exportHtmlPack, PRESET_RESOLUTIONS } from '@glowframe/export';
 import { LOGOS, INFINITY_SVG_PATH, PHANTOM_SVG_PATH } from '@glowframe/presets';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Slider } from '@/components/ui/slider';
-import {
-  Download,
-  Copy,
-  Check,
-  Upload,
-  Maximize2,
-} from 'lucide-react';
+import ColorPicker from '@/components/ColorPicker';
+import { Download, Upload } from 'lucide-react';
 
 type ShapeTemplate = { id: string; name: string; d: string; viewBox: [number, number, number, number] };
 
@@ -66,9 +60,9 @@ export default function CustomStudio({ initialScene }: CustomStudioProps) {
   const [viewBoxW, setViewBoxW] = useState(100);
   const [viewBoxH, setViewBoxH] = useState(100);
   const [scale, setScale] = useState(initialScene?.shape.scale ?? 0.32);
-  const [rotationDeg, setRotationDeg] = useState(0);
-  const [posX, setPosX] = useState(initialScene?.shape.position[0] ?? 0.5);
-  const [posY, setPosY] = useState(initialScene?.shape.position[1] ?? 0.52);
+  // The shape is always centred and upright; only its size is adjustable.
+  const posX = initialScene?.shape.position[0] ?? 0.5;
+  const posY = initialScene?.shape.position[1] ?? 0.52;
 
   // Optics & Glow State
   const [edgeWidth, setEdgeWidth] = useState(initialScene?.edge.width ?? 0.0035);
@@ -84,9 +78,9 @@ export default function CustomStudio({ initialScene }: CustomStudioProps) {
   const [useCustomColors, setUseCustomColors] = useState(false);
 
   // Status & UI State
-  const [copied, setCopied] = useState(false);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
-  const [isExporting, setIsExporting] = useState(false);
+  const [dragging, setDragging] = useState(false);
+  const [loadedFile, setLoadedFile] = useState<string | null>(null);
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -107,10 +101,10 @@ export default function CustomStudio({ initialScene }: CustomStudioProps) {
         meta: {
           id: shapeName.toLowerCase().replace(/[^a-z0-9]+/g, '-') || 'custom-shape',
           name: shapeName,
-          author: 'Glowframe Studio User',
+          author: 'Halorim Studio User',
           license: 'CC0-1.0',
           tags: ['custom', 'studio', 'vector'],
-          description: `Custom interactive shape rendered via Glowframe Studio at scale ${scale.toFixed(2)}`,
+          description: `Custom interactive shape rendered via Halorim Studio at scale ${scale.toFixed(2)}`,
         },
         background: {
           color: '#000000',
@@ -122,7 +116,7 @@ export default function CustomStudio({ initialScene }: CustomStudioProps) {
           viewBox: [0, 0, viewBoxW, viewBoxH],
           position: [posX, posY],
           scale: scale,
-          rotation: (rotationDeg * Math.PI) / 180,
+          rotation: 0,
         },
         fill: {
           color: '#000000',
@@ -176,7 +170,7 @@ export default function CustomStudio({ initialScene }: CustomStudioProps) {
         performance: { fpsCap: 60, resolutionScale: 1 },
       });
     }
-  }, [shapeName, svgPath, viewBoxW, viewBoxH, scale, rotationDeg, posX, posY, edgeWidth, falloff, intensity, dispersion, selectedPaletteIdx, rotationSpeed, customColor1, customColor2, useCustomColors]);
+  }, [shapeName, svgPath, viewBoxW, viewBoxH, scale, posX, posY, edgeWidth, falloff, intensity, dispersion, selectedPaletteIdx, rotationSpeed, customColor1, customColor2, useCustomColors]);
 
   // Mount & Update WebGL2 Renderer
   useEffect(() => {
@@ -235,9 +229,12 @@ export default function CustomStudio({ initialScene }: CustomStudioProps) {
   }, [currentScene]);
 
   // Handle SVG File Upload
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  const readSvgFile = (file: File) => {
+    if (!/\.svg$/i.test(file.name) && file.type !== 'image/svg+xml') {
+      setStatusMessage('Error: that file is not an SVG');
+      setTimeout(() => setStatusMessage(null), 4000);
+      return;
+    }
 
     const reader = new FileReader();
     reader.onload = (event) => {
@@ -259,6 +256,7 @@ export default function CustomStudio({ initialScene }: CustomStudioProps) {
       if (pathMatch && pathMatch[1]) {
         setSvgPath(pathMatch[1]);
         setShapeName(file.name.replace(/\.[^/.]+$/, ''));
+        setLoadedFile(file.name);
         setStatusMessage(`Imported SVG path from "${file.name}"`);
         setTimeout(() => setStatusMessage(null), 3000);
       } else {
@@ -269,128 +267,78 @@ export default function CustomStudio({ initialScene }: CustomStudioProps) {
     reader.readAsText(file);
   };
 
-  // Download Handlers
-  const handleDownloadScene = () => {
-    try {
-      const json = exportSceneJson(currentScene);
-      const blob = new Blob([json], { type: 'application/json' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `${currentScene.meta.id}.glowframe.json`;
-      a.click();
-      URL.revokeObjectURL(url);
-      setStatusMessage('Scene JSON exported successfully');
-      setTimeout(() => setStatusMessage(null), 3000);
-    } catch (err) {
-      console.error(err);
-      setStatusMessage('Export failed');
-    }
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) readSvgFile(file);
+    // Lets the same file be chosen again after edits.
+    e.target.value = '';
   };
 
-  const handleDownloadPng = async () => {
-    try {
-      setIsExporting(true);
-      setStatusMessage('Rendering high-res 4K frame...');
-      const res = PRESET_RESOLUTIONS['UHD_4K'];
-      const blob = await exportPng({
-        scene: currentScene,
-        width: res.width,
-        height: res.height,
-        timeMs: 1000,
-      });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `${currentScene.meta.id}-4k.png`;
-      a.click();
-      URL.revokeObjectURL(url);
-      setStatusMessage('4K PNG snapshot downloaded');
-    } catch (err) {
-      console.error(err);
-      setStatusMessage('PNG render failed');
-    } finally {
-      setIsExporting(false);
-      setTimeout(() => setStatusMessage(null), 3000);
-    }
+  const handleDrop = (e: React.DragEvent<HTMLLabelElement>) => {
+    e.preventDefault();
+    setDragging(false);
+    const file = e.dataTransfer.files?.[0];
+    if (file) readSvgFile(file);
   };
 
-  const handleDownloadHtml = async () => {
-    try {
-      setIsExporting(true);
-      setStatusMessage('Packaging standalone offline ZIP...');
-      let bundledCoreJs: string | undefined;
-      try {
-        const res = await fetch('/glowframe-core.js');
-        if (res.ok) bundledCoreJs = await res.text();
-      } catch {}
-
-      const zipBytes = await exportHtmlPack({
-        scene: currentScene,
-        bundledCoreJs,
-      });
-
-      const blob = new Blob([zipBytes], { type: 'application/zip' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `${currentScene.meta.id}-wallpaper.zip`;
-      a.click();
-      URL.revokeObjectURL(url);
-      setStatusMessage('Offline HTML wallpaper pack downloaded');
-    } catch (err) {
-      console.error(err);
-      setStatusMessage('HTML pack packaging failed');
-    } finally {
-      setIsExporting(false);
+  // Export: a plain SVG of the shape. The desktop app's "Load Custom SVG" reads the viewBox and path,
+  // then lights the edge itself, so nothing else needs to travel with the file.
+  const handleDownloadSvg = () => {
+    const d = svgPath.trim();
+    if (!d) {
+      setStatusMessage('Nothing to export: the SVG path is empty');
       setTimeout(() => setStatusMessage(null), 3000);
+      return;
     }
-  };
-
-  const handleCopyJson = () => {
-    const json = JSON.stringify(currentScene, null, 2);
-    navigator.clipboard.writeText(json);
-    setCopied(true);
-    setStatusMessage('Scene configuration copied to clipboard');
-    setTimeout(() => {
-      setCopied(false);
-      setStatusMessage(null);
-    }, 2500);
+    const svg =
+      `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${viewBoxW} ${viewBoxH}">\n` +
+      `  <path d="${d.replace(/"/g, '&quot;')}" fill="#000000"/>\n` +
+      `</svg>\n`;
+    const url = URL.createObjectURL(new Blob([svg], { type: 'image/svg+xml' }));
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${currentScene.meta.id}.svg`;
+    a.click();
+    URL.revokeObjectURL(url);
+    setStatusMessage(`Saved ${currentScene.meta.id}.svg`);
+    setTimeout(() => setStatusMessage(null), 3000);
   };
 
   return (
-    <div className="mx-auto max-w-site px-4 pb-8 pt-10 sm:px-6">
-      <header className="max-w-2xl animate-rise">
+    <div>
+      <header className="animate-rise border-b border-line px-5 py-12 sm:px-6">
         <h1 className="text-[clamp(36px,6vw,60px)] font-medium leading-[1.02] tracking-[-0.045em]">Studio</h1>
-        <p className="mt-4 text-muted">
-          Draw or upload any 2D shape and light its edge. Everything updates live, then export it as a still, an HTML
-          pack or a scene file.
+        <p className="mt-4 max-w-2xl text-muted">
+          Pick or upload a 2D shape and see its edge lit live. Download it as an SVG, then use Load Custom SVG in the
+          Halorim desktop app to run it on your desktop.
         </p>
       </header>
 
       <p
-        className="mt-6 h-5 text-sm text-muted"
+        className="flex h-11 items-center border-b border-line px-5 font-mono text-[11px] uppercase tracking-[0.14em] text-muted sm:px-6"
         role="status"
         aria-live="polite"
       >
         {statusMessage ?? ''}
       </p>
 
-      <div className="mt-4 grid grid-cols-1 gap-10 lg:grid-cols-12 lg:gap-12">
+      <div className="grid grid-cols-1 lg:grid-cols-12">
         {/* Left Column: Real-time Live WebGL2 Viewport (7 Cols) */}
-        <div className="flex flex-col gap-10 lg:col-span-7">
+        <div className="flex flex-col lg:col-span-7 lg:border-r lg:border-line">
+          <div className="bg-dots border-b border-line p-3 sm:p-6">
           <div
             ref={containerRef}
-            className="relative aspect-video w-full overflow-hidden rounded-2xl bg-black"
+            className="relative aspect-video w-full overflow-hidden border border-line-strong bg-black"
           >
             <canvas ref={canvasRef} className="block h-full w-full cursor-crosshair" />
-            <p className="pointer-events-none absolute bottom-3 left-4 text-[13px] text-muted">
+            <p className="pointer-events-none absolute bottom-3 left-4 bg-black/60 px-1.5 font-mono text-[11px] uppercase tracking-[0.12em] text-muted">
               Move the cursor to steer the light. Click to change colors.
             </p>
           </div>
+          </div>
 
           {/* Shape templates */}
-          <section aria-labelledby="templates">
+          <section aria-labelledby="templates" className="border-b border-line p-5 sm:p-6">
             <h2 id="templates" className="text-lg font-medium tracking-tight">
               Templates
             </h2>
@@ -415,45 +363,51 @@ export default function CustomStudio({ initialScene }: CustomStudioProps) {
           </section>
 
           {/* Export */}
-          <section aria-labelledby="export">
+          <section aria-labelledby="export" className="border-b border-line p-5 sm:p-6 lg:border-b-0">
             <h2 id="export" className="text-lg font-medium tracking-tight">
               Export
             </h2>
-            <div className="mt-4 flex flex-wrap gap-2">
-              <Button size="sm" onClick={handleDownloadScene} disabled={isExporting}>
-                <Download className="h-3.5 w-3.5" />
-                .glowframe.json
-              </Button>
-              <Button variant="secondary" size="sm" onClick={handleDownloadHtml} disabled={isExporting}>
-                <Download className="h-3.5 w-3.5" />
-                Offline HTML zip
-              </Button>
-              <Button variant="secondary" size="sm" onClick={handleDownloadPng} disabled={isExporting}>
-                <Maximize2 className="h-3.5 w-3.5" />
-                Capture 4K PNG
-              </Button>
-              <Button variant="ghost" size="sm" onClick={handleCopyJson} className="sm:ml-auto">
-                {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
-                {copied ? 'Copied' : 'Copy JSON'}
-              </Button>
-            </div>
+            <p className="mt-1 text-sm text-muted">
+              Saves your shape as <span className="font-mono text-[13px] text-fg">{currentScene.meta.id}.svg</span>.
+              In the desktop tray menu, choose Load Custom SVG and pick the file.
+            </p>
+            <Button className="mt-4" onClick={handleDownloadSvg}>
+              <Download className="h-4 w-4" />
+              Download SVG
+            </Button>
           </section>
         </div>
 
         {/* Right Column: Shape Modulation & Optical Controls (5 Cols) */}
-        <div className="flex flex-col gap-10 lg:col-span-5">
+        <div className="flex flex-col lg:col-span-5">
           {/* Vector Path Input & File Upload */}
-          <section aria-labelledby="vector" className="rounded-2xl bg-surface p-5 sm:p-6">
-            <div className="flex items-center justify-between">
-              <h2 id="vector" className="text-lg font-medium tracking-tight">
-                Shape
-              </h2>
-              <label className="flex cursor-pointer items-center gap-1.5 rounded-full text-sm text-muted transition-colors duration-fast ease-out hover:text-fg has-[:focus-visible]:outline has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-4 has-[:focus-visible]:outline-fg">
-                <Upload className="h-3.5 w-3.5" />
-                <span>Upload SVG</span>
-                <input type="file" accept=".svg" onChange={handleFileUpload} className="sr-only" />
-              </label>
-            </div>
+          <section aria-labelledby="vector" className="border-b border-line p-5 sm:p-6">
+            <h2 id="vector" className="text-lg font-medium tracking-tight">
+              Shape
+            </h2>
+
+            {/* Upload: a real drop target, not a text link. */}
+            <label
+              onDragOver={(e) => {
+                e.preventDefault();
+                setDragging(true);
+              }}
+              onDragLeave={() => setDragging(false)}
+              onDrop={handleDrop}
+              className={`mt-4 flex cursor-pointer flex-col items-center gap-2 border border-dashed px-4 py-7 text-center transition-colors duration-fast ease-out has-[:focus-visible]:outline has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-fg ${
+                dragging ? 'border-fg bg-raised' : 'border-line-strong bg-surface hover:border-fg hover:bg-raised'
+              }`}
+            >
+              <span className="flex h-10 w-10 items-center justify-center border border-line-strong">
+                <Upload className="h-4 w-4" />
+              </span>
+              <span className="text-sm font-medium">{dragging ? 'Drop to load' : 'Upload SVG'}</span>
+              <span className="text-[13px] text-muted">
+                {loadedFile ? `Loaded ${loadedFile}. Click to replace.` : 'Click to choose a file, or drop a .svg here'}
+              </span>
+              <input type="file" accept=".svg,image/svg+xml" onChange={handleFileUpload} className="sr-only" />
+            </label>
+
             <div className="mt-5 flex flex-col gap-4">
               <div>
                 <Label htmlFor="shape-name">Name</Label>
@@ -464,46 +418,13 @@ export default function CustomStudio({ initialScene }: CustomStudioProps) {
                   className="mt-2"
                 />
               </div>
-
-              <div>
-                <Label htmlFor="svg-path">SVG path</Label>
-                <textarea
-                  id="svg-path"
-                  value={svgPath}
-                  onChange={(e) => setSvgPath(e.target.value)}
-                  rows={3}
-                  className="mt-2 w-full resize-none rounded-xl bg-raised p-3 font-mono text-[13px] text-fg outline-none transition-colors duration-fast ease-out placeholder:text-muted hover:bg-hover focus-visible:bg-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fg"
-                  placeholder="M 50 15 L 85 80 L 15 80 Z"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <Label>Viewbox width</Label>
-                  <Input
-                    type="number"
-                    value={viewBoxW}
-                    onChange={(e) => setViewBoxW(Number(e.target.value) || 100)}
-                    className="mt-2"
-                  />
-                </div>
-                <div>
-                  <Label>Viewbox height</Label>
-                  <Input
-                    type="number"
-                    value={viewBoxH}
-                    onChange={(e) => setViewBoxH(Number(e.target.value) || 100)}
-                    className="mt-2"
-                  />
-                </div>
-              </div>
             </div>
           </section>
 
-          {/* Geometry Transformations */}
-          <section aria-labelledby="transform" className="rounded-2xl bg-surface p-5 sm:p-6">
+          {/* Shape size */}
+          <section aria-labelledby="transform" className="border-b border-line p-5 sm:p-6">
             <h2 id="transform" className="text-lg font-medium tracking-tight">
-              Transform
+              Size
             </h2>
             <div className="mt-5 flex flex-col gap-5">
               <div>
@@ -522,63 +443,11 @@ export default function CustomStudio({ initialScene }: CustomStudioProps) {
                   }}
                 />
               </div>
-
-              <div>
-                <div className="mb-3 flex items-center justify-between text-sm">
-                  <Label>Rotation</Label>
-                  <span className="tabular-nums text-fg">{rotationDeg}&deg;</span>
-                </div>
-                <Slider
-                  min={0}
-                  max={360}
-                  step={1}
-                  value={[rotationDeg]}
-                  onValueChange={(val) => {
-                    const v = val[0];
-                    if (v !== undefined) setRotationDeg(v);
-                  }}
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <div className="mb-3 flex items-center justify-between text-sm">
-                    <Label>Position X</Label>
-                    <span className="tabular-nums text-fg">{posX.toFixed(2)}</span>
-                  </div>
-                  <Slider
-                    min={0.1}
-                    max={0.9}
-                    step={0.01}
-                    value={[posX]}
-                    onValueChange={(val) => {
-                      const v = val[0];
-                      if (v !== undefined) setPosX(v);
-                    }}
-                  />
-                </div>
-                <div>
-                  <div className="mb-3 flex items-center justify-between text-sm">
-                    <Label>Position Y</Label>
-                    <span className="tabular-nums text-fg">{posY.toFixed(2)}</span>
-                  </div>
-                  <Slider
-                    min={0.1}
-                    max={0.9}
-                    step={0.01}
-                    value={[posY]}
-                    onValueChange={(val) => {
-                      const v = val[0];
-                      if (v !== undefined) setPosY(v);
-                    }}
-                  />
-                </div>
-              </div>
             </div>
           </section>
 
           {/* Optics & Atmospheric Glow Falloff */}
-          <section aria-labelledby="glow" className="rounded-2xl bg-surface p-5 sm:p-6">
+          <section aria-labelledby="glow" className="border-b border-line p-5 sm:p-6">
             <h2 id="glow" className="text-lg font-medium tracking-tight">
               Glow
             </h2>
@@ -671,25 +540,25 @@ export default function CustomStudio({ initialScene }: CustomStudioProps) {
                 <div className="mt-3 flex gap-1.5">
                   <button
                     onClick={() => setRotationSpeed(0)}
-                    className="h-7 rounded-full bg-raised px-3 text-[13px] text-muted transition-colors duration-fast ease-out hover:bg-hover hover:text-fg"
+                    className="h-7 border border-line px-3 text-[13px] text-muted transition-colors duration-fast ease-out hover:border-line-strong hover:text-fg"
                   >
                     Freeze
                   </button>
                   <button
                     onClick={() => setRotationSpeed(0.02)}
-                    className="h-7 rounded-full bg-raised px-3 text-[13px] text-muted transition-colors duration-fast ease-out hover:bg-hover hover:text-fg"
+                    className="h-7 border border-line px-3 text-[13px] text-muted transition-colors duration-fast ease-out hover:border-line-strong hover:text-fg"
                   >
                     Slow
                   </button>
                   <button
                     onClick={() => setRotationSpeed(0.05)}
-                    className="h-7 rounded-full bg-raised px-3 text-[13px] text-muted transition-colors duration-fast ease-out hover:bg-hover hover:text-fg"
+                    className="h-7 border border-line px-3 text-[13px] text-muted transition-colors duration-fast ease-out hover:border-line-strong hover:text-fg"
                   >
                     Normal
                   </button>
                   <button
                     onClick={() => setRotationSpeed(0.12)}
-                    className="h-7 rounded-full bg-raised px-3 text-[13px] text-muted transition-colors duration-fast ease-out hover:bg-hover hover:text-fg"
+                    className="h-7 border border-line px-3 text-[13px] text-muted transition-colors duration-fast ease-out hover:border-line-strong hover:text-fg"
                   >
                     Fast
                   </button>
@@ -703,8 +572,8 @@ export default function CustomStudio({ initialScene }: CustomStudioProps) {
                   <button
                     onClick={() => setUseCustomColors(!useCustomColors)}
                     aria-pressed={useCustomColors}
-                    className={`h-7 rounded-full px-3 text-[13px] transition-colors duration-fast ease-out ${
-                      useCustomColors ? 'bg-fg text-bg' : 'bg-raised text-muted hover:bg-hover hover:text-fg'
+                    className={`h-7  px-3 text-[13px] transition-colors duration-fast ease-out ${
+                      useCustomColors ? 'border border-fg bg-fg text-bg' : 'border border-line text-muted hover:border-line-strong hover:text-fg'
                     }`}
                   >
                     Custom colors
@@ -712,36 +581,20 @@ export default function CustomStudio({ initialScene }: CustomStudioProps) {
                 </div>
 
                 {useCustomColors ? (
-                  <div className="flex flex-col gap-3 rounded-xl bg-raised p-4">
+                  <div className="flex flex-col gap-3 border border-line bg-surface p-4">
                     <div className="grid grid-cols-2 gap-3">
                       <div>
                         <Label className="mb-2 block">Primary</Label>
-                        <div className="flex items-center gap-2">
-                          <input
-                            type="color"
-                            value={customColor1}
-                            onChange={(e) => setCustomColor1(e.target.value)}
-                            className="h-8 w-8 cursor-pointer rounded-lg bg-transparent"
-                          />
-                          <span className="font-mono text-[13px] text-muted">{customColor1}</span>
-                        </div>
+                        <ColorPicker label="Primary" value={customColor1} onChange={setCustomColor1} />
                       </div>
                       <div>
                         <Label className="mb-2 block">Secondary</Label>
-                        <div className="flex items-center gap-2">
-                          <input
-                            type="color"
-                            value={customColor2}
-                            onChange={(e) => setCustomColor2(e.target.value)}
-                            className="h-8 w-8 cursor-pointer rounded-lg bg-transparent"
-                          />
-                          <span className="font-mono text-[13px] text-muted">{customColor2}</span>
-                        </div>
+                        <ColorPicker label="Secondary" value={customColor2} onChange={setCustomColor2} align="end" />
                       </div>
                     </div>
                   </div>
                 ) : (
-                  <div className="grid grid-cols-2 gap-2">
+                  <div className="grid grid-cols-2 border-l border-t border-line">
                     {PALETTE_PRESETS.map((p, idx) => (
                       <button
                         key={p.name}
@@ -750,18 +603,18 @@ export default function CustomStudio({ initialScene }: CustomStudioProps) {
                           setUseCustomColors(false);
                         }}
                         aria-pressed={selectedPaletteIdx === idx && !useCustomColors}
-                        className={`flex flex-col gap-2 rounded-xl p-3 text-left transition-colors duration-fast ease-out ${
+                        className={`flex flex-col gap-2 border-b border-r border-line p-3 text-left transition-colors duration-fast ease-out ${
                           selectedPaletteIdx === idx && !useCustomColors
-                            ? 'bg-line'
-                            : 'bg-raised hover:bg-hover'
+                            ? 'bg-fg text-bg'
+                            : 'hover:bg-raised'
                         }`}
                       >
-                        <div className="truncate text-[13px] text-fg">{p.name}</div>
+                        <div className="truncate text-[13px]">{p.name}</div>
                         <div className="flex items-center gap-1">
                           {p.colors.slice(0, 4).map((c, i) => (
                             <div
                               key={i}
-                              className="h-3.5 w-3.5 rounded-full"
+                              className="h-3.5 w-3.5 border border-line-strong"
                               style={{ backgroundColor: c }}
                             />
                           ))}

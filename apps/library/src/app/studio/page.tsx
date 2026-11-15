@@ -1,7 +1,7 @@
 import CustomStudio from '@/components/CustomStudio';
 
 export const metadata = {
-  title: 'Studio | Glowframe',
+  title: 'Studio | Halorim',
   description: 'Design, transform and test custom 2D shapes with real-time prismatic rim glow.',
 };
 

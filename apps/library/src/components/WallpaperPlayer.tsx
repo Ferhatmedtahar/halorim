@@ -93,7 +93,7 @@ export default function WallpaperPlayer({ scene }: WallpaperPlayerProps) {
     <div
       ref={containerRef}
       className={`group relative w-full overflow-hidden bg-black ${
-        isFullscreen ? 'fixed inset-0 z-50 aspect-auto' : 'aspect-video rounded-2xl'
+        isFullscreen ? 'fixed inset-0 z-50 aspect-auto' : 'aspect-video'
       }`}
     >
       <canvas ref={canvasRef} className="block h-full w-full cursor-crosshair" />
@@ -112,7 +112,7 @@ export default function WallpaperPlayer({ scene }: WallpaperPlayerProps) {
           variant="secondary"
           size="sm"
           onClick={toggleFullscreen}
-          className="bg-black/60 backdrop-blur-md hover:bg-black/80"
+          className="border-line-strong bg-black/60 backdrop-blur-md hover:bg-black/80"
           aria-label={isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
         >
           {isFullscreen ? <Minimize2 className="h-3.5 w-3.5" /> : <Maximize2 className="h-3.5 w-3.5" />}
@@ -120,7 +120,7 @@ export default function WallpaperPlayer({ scene }: WallpaperPlayerProps) {
         </Button>
       </div>
 
-      <p className="pointer-events-none absolute bottom-3 left-4 text-[13px] text-muted">
+      <p className="pointer-events-none absolute bottom-3 left-4 bg-black/60 px-1.5 font-mono text-[11px] uppercase tracking-[0.12em] text-muted">
         Move the cursor to steer the light. Click to change colors.
       </p>
     </div>

@@ -3,9 +3,9 @@ import Link from 'next/link';
 import { PRESET_SCENES } from '@glowframe/presets';
 import WallpaperPlayer from '@/components/WallpaperPlayer';
 import DownloadPanel from '@/components/DownloadPanel';
+import SectionBar from '@/components/SectionBar';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft } from 'lucide-react';
-import { glowStops } from '@/lib/palette';
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -18,13 +18,13 @@ export function generateStaticParams() {
 export async function generateMetadata({ params }: PageProps) {
   const { id } = await params;
   const scene = PRESET_SCENES[id];
-  return scene ? { title: `${scene.meta.name} | Glowframe`, description: scene.meta.description } : {};
+  return scene ? { title: `${scene.meta.name} | Halorim`, description: scene.meta.description } : {};
 }
 
 const SETUP = [
   {
     os: 'Linux',
-    body: 'Open the scene file in the Glowframe desktop app. Works on X11 and on Wayland compositors with layer-shell.',
+    body: 'Open the scene file in the Halorim desktop app. Works on X11 and on Wayland compositors with layer-shell.',
   },
   {
     os: 'Windows',
@@ -44,7 +44,6 @@ export default async function WallpaperDetailPage({ params }: PageProps) {
     notFound();
   }
 
-  const [a, b] = glowStops(scene);
   const facts: [string, string][] = [
     ['Author', scene.meta.author],
     ['License', scene.meta.license],
@@ -54,41 +53,34 @@ export default async function WallpaperDetailPage({ params }: PageProps) {
   ];
 
   return (
-    <div className="mx-auto max-w-site px-4 pb-8 pt-6 sm:px-6">
+    <div>
       <Link
         href="/"
-        className="inline-flex items-center gap-1.5 rounded-full text-sm text-muted transition-colors duration-fast ease-out hover:text-fg"
+        className="flex h-11 items-center gap-2 border-b border-line px-5 font-mono text-[11px] uppercase tracking-[0.14em] text-muted transition-colors duration-fast ease-out hover:bg-raised hover:text-fg sm:px-6"
       >
-        <ArrowLeft className="h-4 w-4" />
-        Back to Gallery
+        <ArrowLeft className="h-3.5 w-3.5" />
+        Back to library
       </Link>
 
-      <header className="mt-8 max-w-2xl animate-rise">
+      <header className="animate-rise border-b border-line px-5 py-12 sm:px-6">
         <h1 className="text-[clamp(36px,6vw,60px)] font-medium leading-[1.02] tracking-[-0.045em]">{scene.meta.name}</h1>
-        <p className="mt-4 text-muted">{scene.meta.description}</p>
+        <p className="mt-4 max-w-2xl text-muted">{scene.meta.description}</p>
       </header>
 
-      {/* Stage: live preview with the wallpaper's own light behind it */}
-      <div className="relative mt-10">
-        <div
-          aria-hidden="true"
-          className="absolute -inset-4 rounded-[32px] opacity-20 blur-3xl"
-          style={{ background: `linear-gradient(120deg, ${a}, ${b})` }}
-        />
-        <div className="relative">
+      {/* Stage: live preview framed by the dotted field */}
+      <div className="bg-dots border-b border-line p-3 sm:p-6">
+        <div className="border border-line-strong bg-black">
           <WallpaperPlayer scene={scene} />
         </div>
       </div>
 
-      <div className="mt-12 grid gap-10 lg:grid-cols-[1fr_380px] lg:gap-12">
-        <div className="flex flex-col gap-12">
-          <section aria-labelledby="details">
-            <h2 id="details" className="text-lg font-medium tracking-tight">
-              Details
-            </h2>
-            <dl className="mt-4 flex flex-col gap-1">
+      <div className="grid lg:grid-cols-[1fr_380px]">
+        <div className="flex flex-col lg:border-r lg:border-line">
+          <section aria-labelledby="details" className="border-b border-line">
+            <SectionBar label="Details" id="details" />
+            <dl>
               {facts.map(([k, v]) => (
-                <div key={k} className="flex items-center justify-between rounded-lg px-4 py-3 odd:bg-surface">
+                <div key={k} className="flex items-center justify-between border-b border-line px-5 py-3 last:border-b-0 sm:px-6">
                   <dt className="text-sm text-muted">{k}</dt>
                   <dd className="text-sm tabular-nums">{v}</dd>
                 </div>
@@ -96,49 +88,53 @@ export default async function WallpaperDetailPage({ params }: PageProps) {
             </dl>
           </section>
 
-          <section aria-labelledby="palette">
-            <h2 id="palette" className="text-lg font-medium tracking-tight">
-              Palette
-            </h2>
-            <ul className="mt-4 flex flex-wrap gap-2">
+          <section aria-labelledby="palette" className="border-b border-line">
+            <SectionBar label="Palette" id="palette" />
+            <ul className="grid grid-cols-2 sm:grid-cols-4">
               {scene.palettes[0]?.map((color, idx) => (
-                <li key={idx} className="flex items-center gap-2 rounded-full bg-surface py-1.5 pl-2 pr-3.5">
-                  <span className="h-4 w-4 rounded-full" style={{ backgroundColor: color }} />
-                  <span className="text-[13px] text-muted">Stop {idx + 1}</span>
+                <li
+                  key={idx}
+                  className="flex items-center gap-3 border-b border-r border-line px-5 py-4 sm:px-6"
+                >
+                  <span className="h-5 w-5 border border-line-strong" style={{ backgroundColor: color }} />
+                  <span className="font-mono text-[11px] uppercase tracking-[0.12em] text-muted">Stop {idx + 1}</span>
                 </li>
               ))}
             </ul>
           </section>
 
-          <section aria-labelledby="studio">
-            <h2 id="studio" className="text-lg font-medium tracking-tight">
-              Make it yours
-            </h2>
-            <p className="mt-1 text-sm text-muted">Change scale, rotation and glow in the shape studio.</p>
-            <Button asChild variant="secondary" className="mt-4">
-              <Link href="/studio">Open the studio</Link>
-            </Button>
+          <section aria-labelledby="studio" className="border-b border-line lg:border-b-0">
+            <SectionBar label="Make it yours" id="studio" />
+            <div className="bg-hatch px-5 py-8 sm:px-6">
+              <div className="inline-block bg-bg pr-4">
+                <p className="text-sm text-muted">Change scale, rotation and glow in the shape studio.</p>
+                <Button asChild variant="secondary" className="mt-4">
+                  <Link href="/studio">Open the studio</Link>
+                </Button>
+              </div>
+            </div>
           </section>
         </div>
 
-        <aside className="flex flex-col gap-8">
-          <DownloadPanel scene={scene} />
+        <aside className="flex flex-col">
+          <SectionBar label="Download" />
+          <div className="border-b border-line">
+            <DownloadPanel scene={scene} />
+          </div>
 
-          <section aria-labelledby="setup" className="px-1">
-            <h2 id="setup" className="text-lg font-medium tracking-tight">
-              How to run it
-            </h2>
-            <ul className="mt-4 flex flex-col gap-4">
+          <section aria-labelledby="setup">
+            <SectionBar label="How to run it" id="setup" />
+            <ul>
               {SETUP.map((s) => (
-                <li key={s.os}>
+                <li key={s.os} className="border-b border-line px-5 py-4 sm:px-6">
                   <div className="text-[15px] font-medium">{s.os}</div>
-                  <p className="text-sm leading-relaxed text-muted">{s.body}</p>
+                  <p className="mt-1 text-sm leading-relaxed text-muted">{s.body}</p>
                 </li>
               ))}
             </ul>
             <Link
               href="/about"
-              className="mt-5 inline-block text-sm text-muted underline-offset-4 transition-colors duration-fast ease-out hover:text-fg hover:underline"
+              className="block px-5 py-4 font-mono text-[11px] uppercase tracking-[0.14em] text-muted transition-colors duration-fast ease-out hover:bg-raised hover:text-fg sm:px-6"
             >
               Full installation guide
             </Link>

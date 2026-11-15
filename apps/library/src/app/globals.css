@@ -4,18 +4,21 @@
 
 :root {
   color-scheme: dark;
-  --bg: #050505;
-  --fg: #e8e8e8;
+  --bg: #0a0a0a;
+  --fg: #ededed;
   --muted: #8a8a8a;
+  --line: #242424;
+  --line-strong: #3a3a3a;
 }
 
 * {
   box-sizing: border-box;
+  border-radius: 0;
 }
 
 html {
   scroll-behavior: smooth;
-  scroll-padding-top: 80px;
+  scroll-padding-top: 120px;
 }
 
 body {
@@ -32,14 +35,14 @@ body {
 }
 
 ::selection {
-  background: #e8e8e8;
-  color: #050505;
+  background: #ededed;
+  color: #0a0a0a;
 }
 
-/* Keyboard focus: outline only, never a border or shadow. */
+/* Keyboard focus: outline only. */
 :focus-visible {
-  outline: 2px solid #e8e8e8;
-  outline-offset: 3px;
+  outline: 2px solid #ededed;
+  outline-offset: -2px;
 }
 
 ::-webkit-scrollbar {
@@ -51,7 +54,6 @@ body {
 }
 ::-webkit-scrollbar-thumb {
   background: #242424;
-  border-radius: 8px;
 }
 ::-webkit-scrollbar-thumb:hover {
   background: #333;
@@ -64,6 +66,94 @@ body {
   display: none;
 }
 
+/* ---------------------------------------------------------------------------
+   Line work. Muted patterns and slow-moving dashes that give the grid a pulse.
+   --------------------------------------------------------------------------- */
+
+/* Dotted field. */
+.bg-dots {
+  background-image: radial-gradient(#2c2c2c 1px, transparent 1.2px);
+  background-size: 14px 14px;
+}
+
+/* Dotted field that drifts slowly. */
+.bg-dots-drift {
+  background-image: radial-gradient(#2c2c2c 1px, transparent 1.2px);
+  background-size: 14px 14px;
+  animation: dots-drift 14s linear infinite;
+}
+
+/* Diagonal hatch. */
+.bg-hatch {
+  background-image: repeating-linear-gradient(135deg, #1b1b1b 0 1px, transparent 1px 9px);
+}
+
+/* Marching dashes, horizontal and vertical. Draw them as 1px elements. */
+.line-march-x {
+  height: 1px;
+  background-image: repeating-linear-gradient(90deg, #444 0 6px, transparent 6px 12px);
+  background-size: 12px 1px;
+  animation: march-x 1.4s linear infinite;
+}
+.line-march-y {
+  width: 1px;
+  background-image: repeating-linear-gradient(180deg, #444 0 6px, transparent 6px 12px);
+  background-size: 1px 12px;
+  animation: march-y 1.4s linear infinite;
+}
+
+/* A short bright segment that travels along a hairline. */
+.line-run {
+  position: relative;
+  overflow: hidden;
+}
+.line-run::after {
+  content: '';
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 160px;
+  background: linear-gradient(90deg, transparent, #ededed, transparent);
+  opacity: 0.55;
+  animation: line-run 5.5s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
+/* Corner ticks for framed images. */
+.ticks {
+  --tick: #6a6a6a;
+  background:
+    linear-gradient(var(--tick), var(--tick)) top left / 9px 1px no-repeat,
+    linear-gradient(var(--tick), var(--tick)) top left / 1px 9px no-repeat,
+    linear-gradient(var(--tick), var(--tick)) top right / 9px 1px no-repeat,
+    linear-gradient(var(--tick), var(--tick)) top right / 1px 9px no-repeat,
+    linear-gradient(var(--tick), var(--tick)) bottom left / 9px 1px no-repeat,
+    linear-gradient(var(--tick), var(--tick)) bottom left / 1px 9px no-repeat,
+    linear-gradient(var(--tick), var(--tick)) bottom right / 9px 1px no-repeat,
+    linear-gradient(var(--tick), var(--tick)) bottom right / 1px 9px no-repeat;
+}
+
+@keyframes march-x {
+  to {
+    background-position: 12px 0;
+  }
+}
+@keyframes march-y {
+  to {
+    background-position: 0 12px;
+  }
+}
+@keyframes dots-drift {
+  to {
+    background-position: 14px 14px;
+  }
+}
+@keyframes line-run {
+  0% {
+    transform: translateX(-160px);
+  }
+  100% {
+    transform: translateX(1200px);
+  }
+}
 
 @media (prefers-reduced-motion: reduce) {
   html {

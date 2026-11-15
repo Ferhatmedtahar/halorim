@@ -8,7 +8,7 @@ export default function HomePage() {
 
   return (
     <>
-      <Hero />
+      <Hero wallpaperCount={presets.length} />
       <GalleryView presets={presets} />
       <DownloadSection />
     </>

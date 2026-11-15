@@ -1,33 +1,37 @@
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { SITE } from '@/lib/site';
+import SectionBar from '@/components/SectionBar';
 
 export const metadata = {
-  title: 'Guide | Glowframe',
-  description: 'How to install and run Glowframe wallpapers on Windows, Linux and in a web browser.',
+  title: 'Guide | Halorim',
+  description: 'How to install and run Halorim wallpapers on Windows, Linux and in a web browser.',
 };
 
 function Section({ id, title, children }: { id: string; title: string; children: React.ReactNode }) {
   return (
-    <section aria-labelledby={id} className="rounded-2xl bg-surface p-6 sm:p-8">
-      <h2 id={id} className="text-2xl font-medium tracking-[-0.03em]">
-        {title}
-      </h2>
-      <div className="mt-4 flex flex-col gap-4 text-muted leading-relaxed">{children}</div>
+    <section aria-labelledby={id} className="border-b border-line">
+      <SectionBar label="Guide" />
+      <div className="grid md:grid-cols-[220px_1fr]">
+        <h2 id={id} className="border-b border-line px-5 py-6 text-2xl font-medium tracking-[-0.03em] sm:px-6 md:border-b-0 md:border-r">
+          {title}
+        </h2>
+        <div className="flex flex-col gap-4 px-5 py-6 leading-relaxed text-muted sm:px-6">{children}</div>
+      </div>
     </section>
   );
 }
 
 function Code({ children }: { children: React.ReactNode }) {
-  return <code className="rounded-md bg-raised px-1.5 py-0.5 font-mono text-[13px] text-fg">{children}</code>;
+  return <code className="border border-line bg-raised px-1.5 py-0.5 font-mono text-[13px] text-fg">{children}</code>;
 }
 
 function Steps({ items }: { items: React.ReactNode[] }) {
   return (
-    <ol className="flex flex-col gap-2 rounded-xl bg-raised p-5 text-sm">
+    <ol className="flex flex-col gap-2 border border-line bg-surface p-5 text-sm">
       {items.map((item, i) => (
         <li key={i} className="flex gap-3">
-          <span className="w-4 shrink-0 text-muted tabular-nums">{i + 1}</span>
+          <span className="w-4 shrink-0 font-mono text-muted tabular-nums">{i + 1}</span>
           <span className="text-fg/90">{item}</span>
         </li>
       ))}
@@ -37,16 +41,16 @@ function Steps({ items }: { items: React.ReactNode[] }) {
 
 export default function AboutPage() {
   return (
-    <div className="mx-auto max-w-3xl px-4 pb-8 pt-10 sm:px-6">
-      <header className="animate-rise">
+    <div>
+      <header className="animate-rise border-b border-line px-5 py-12 sm:px-6">
         <h1 className="text-[clamp(36px,6vw,60px)] font-medium leading-[1.02] tracking-[-0.045em]">Guide</h1>
-        <p className="mt-4 text-muted">
-          Install Glowframe on Linux or Windows, or run any wallpaper in a browser. Pick the setup that matches your
+        <p className="mt-4 max-w-2xl text-muted">
+          Install Halorim on Linux or Windows, or run any wallpaper in a browser. Pick the setup that matches your
           system.
         </p>
       </header>
 
-      <div className="mt-12 flex flex-col gap-4">
+      <div>
         <Section id="linux" title="Linux">
           <p>
             Download the desktop app from the{' '}
@@ -63,20 +67,20 @@ export default function AboutPage() {
           <div>
             <div className="font-medium text-fg">X11</div>
             <p className="mt-1 text-sm">
-              Glowframe opens a window with the <Code>_NET_WM_WINDOW_TYPE_DESKTOP</Code> hint, so it sits below
+              Halorim opens a window with the <Code>_NET_WM_WINDOW_TYPE_DESKTOP</Code> hint, so it sits below
               everything else.
             </p>
           </div>
           <div>
             <div className="font-medium text-fg">Wayland with layer-shell</div>
             <p className="mt-1 text-sm">
-              On Hyprland, Sway and KDE Plasma 6, Glowframe attaches to the background layer.
+              On Hyprland, Sway and KDE Plasma 6, Halorim attaches to the background layer.
             </p>
           </div>
           <div>
             <div className="font-medium text-fg">GNOME on Wayland</div>
             <p className="mt-1 text-sm">
-              GNOME Shell does not allow third-party layer-shell surfaces. Glowframe runs through Xwayland instead and
+              GNOME Shell does not allow third-party layer-shell surfaces. Halorim runs through Xwayland instead and
               passes input through, so desktop icons and files stay clickable.
             </p>
           </div>
@@ -118,13 +122,13 @@ export default function AboutPage() {
           <p>
             Wallpapers are rendered in WebGL2 from a distance field of the shape, with chromatic dispersion along the
             edge. The engine is MIT licensed. The Tux, Arch and Debian shapes are included under their community
-            licenses, and every wallpaper follows the Glowframe v1 scene schema.
+            licenses, and every wallpaper follows the Halorim v1 scene schema.
           </p>
         </Section>
       </div>
 
-      <div className="mt-10">
-        <Button asChild variant="secondary">
+      <div className="bg-dots px-5 py-8 sm:px-6">
+        <Button asChild variant="secondary" className="bg-bg">
           <Link href="/#library">Browse the library</Link>
         </Button>
       </div>

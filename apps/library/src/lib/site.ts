@@ -1,6 +1,6 @@
 /** Single source of truth for links and platform copy shown on the site. */
 export const SITE = {
-  name: 'Glowframe',
+  name: 'Halorim',
   repo: 'https://github.com/Ferhatmedtahar/halorim',
   releases: 'https://github.com/Ferhatmedtahar/halorim/releases/latest',
 } as const;

@@ -5,7 +5,6 @@ import type { Scene } from '@glowframe/schema';
 import { exportPng, exportSceneJson, exportHtmlPack, PRESET_RESOLUTIONS } from '@glowframe/export';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Download } from 'lucide-react';
 
 interface DownloadPanelProps {
   scene: Scene;
@@ -81,24 +80,21 @@ export default function DownloadPanel({ scene }: DownloadPanelProps) {
   };
 
   return (
-    <div className="rounded-2xl bg-surface p-5 sm:p-6">
-      <h2 className="flex items-center gap-2 text-lg font-medium tracking-tight">
-        <Download className="h-4 w-4 text-muted" />
-        Download
-      </h2>
-      <p className="mt-1 text-sm text-muted" role="status" aria-live="polite">
+    <div>
+      <h2 className="sr-only">Download</h2>
+      <p className="border-b border-line px-5 py-3 text-sm text-muted sm:px-6" role="status" aria-live="polite">
         {statusMessage ?? 'Pick the format that fits how you run wallpapers.'}
       </p>
 
-      <div className="mt-6 flex flex-col gap-6">
-        <div>
+      <div className="flex flex-col">
+        <div className="border-b border-line p-5 sm:p-6">
           <div className="flex items-center justify-between gap-3">
             <div>
               <div className="text-[15px] font-medium">Still image</div>
               <div className="text-sm text-muted">PNG rendered at the resolution you choose</div>
             </div>
             <Select value={resolutionKey} onValueChange={(v) => setResolutionKey(v as keyof typeof PRESET_RESOLUTIONS)}>
-              <SelectTrigger aria-label="Resolution" className="h-8 w-auto shrink-0 gap-2 rounded-full bg-raised px-3 text-[13px] hover:bg-hover">
+              <SelectTrigger aria-label="Resolution" className="h-8 w-auto shrink-0 gap-2 px-3 text-[13px]">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -115,7 +111,7 @@ export default function DownloadPanel({ scene }: DownloadPanelProps) {
           </Button>
         </div>
 
-        <div>
+        <div className="border-b border-line p-5 sm:p-6">
           <div className="text-[15px] font-medium">Interactive pack</div>
           <div className="text-sm text-muted">Offline HTML bundle for Lively Wallpaper, WebViews and browsers</div>
           <Button onClick={handleDownloadHtmlPack} disabled={isExportingHtml} className="mt-3 w-full">
@@ -123,9 +119,9 @@ export default function DownloadPanel({ scene }: DownloadPanelProps) {
           </Button>
         </div>
 
-        <div>
+        <div className="p-5 sm:p-6">
           <div className="text-[15px] font-medium">Desktop scene</div>
-          <div className="text-sm text-muted">Native file for the Glowframe desktop app</div>
+          <div className="text-sm text-muted">Native file for the Halorim desktop app</div>
           <Button variant="secondary" onClick={handleDownloadScene} className="mt-3 w-full">
             Download .glowframe.json
           </Button>
