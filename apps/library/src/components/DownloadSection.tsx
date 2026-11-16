@@ -51,11 +51,6 @@ export default function DownloadSection() {
           ))}
         </ul>
       </div>
-
-      <div className="border-t border-line px-5 py-4 text-sm text-muted sm:px-6">
-        Prefer not to install anything? Open a wallpaper and export a standalone HTML pack for Lively Wallpaper or any
-        browser.
-      </div>
     </section>
   );
 }

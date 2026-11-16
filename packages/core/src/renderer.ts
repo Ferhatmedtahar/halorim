@@ -242,8 +242,10 @@ export function createRenderer(options: RendererOptions): Renderer {
       return localX * localX + localY * localY <= 0.35 * 0.35;
     }
 
+    // Against the sealed outer envelope: resting in a hole or gap of the logo still counts as being
+    // on the object.
     const [shapeU, shapeV] = screenToShapeUv(x, y);
-    return shapePipeline.hitTest(shapeU, shapeV) < 0;
+    return shapePipeline.hitTestEnvelope(shapeU, shapeV) < 0;
   }
 
   function hitTestScreen(x: number, y: number): 'object' | 'background' {

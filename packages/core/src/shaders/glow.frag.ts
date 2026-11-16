@@ -39,7 +39,6 @@ uniform float u_hasContent;       // 1.0 if center content active, 0.0 otherwise
 uniform float u_contentScale;     // Relative scale of center content
 uniform float u_contentOpacity;   // Center content alpha opacity
 uniform vec4 u_contentTint;       // Optional tint overlay [r, g, b, active]
-
 vec3 samplePalette(float t) {
   if (u_paletteCount <= 1) return u_palette[0].rgb;
   float scaled = fract(t) * float(u_paletteCount);
@@ -97,7 +96,9 @@ float cursorBeamAt(vec2 bp, vec2 nrm, vec2 cLocal) {
   float dc = length(toC);
   // Softened direction: fades out smoothly (instead of flipping) when the cursor touches the outline.
   vec2 dirC = toC / sqrt(dc * dc + 0.0036);
-  float facing = pow(max(dot(nrm, dirC), 0.0), max(u_cursorSharpness, 1.0) * 1.6);
+  // Soft, wide lobe: the lit side fades out gradually around curves instead of stopping at a line.
+  float cosA = dot(nrm, dirC);
+  float facing = pow(smoothstep(-0.25, 1.0, cosA), max(u_cursorSharpness, 1.0) * 0.8);
   return facing * (0.30 + 0.70 * exp(-dc * 1.8));
 }
 
@@ -232,10 +233,25 @@ void main() {
 
   // Chromatic dispersion for prism effect
   float disp = u_edgeDispersion * 0.035;
-  float rColor = samplePalette(normAngle - disp).r;
-  float gColor = samplePalette(normAngle).g;
-  float bColor = samplePalette(normAngle + disp).b;
-  vec3 edgeColor = vec3(rColor, gColor, bColor);
+  vec3 edgeColor = vec3(
+    samplePalette(normAngle - disp).r,
+    samplePalette(normAngle).g,
+    samplePalette(normAngle + disp).b
+  );
+  if (u_colorFlow == 1) {
+    // The palette orbits around the object (the object itself never moves). Close to the center,
+    // where every angle meets, the steady surface gradient takes over.
+    vec2 orbitDir = normalize(bp + vec2(0.00001, 0.0));
+    float orbit = fract(atan(orbitDir.y, orbitDir.x) / 6.28318530718 + 0.5 - u_time * u_rotationSpeed + u_hueShift);
+    vec3 orbitColor = vec3(
+      samplePalette(orbit - disp).r,
+      samplePalette(orbit).g,
+      samplePalette(orbit + disp).b
+    );
+    float orbitWeight = smoothstep(0.06, 0.24, length(bp));
+    edgeColor = mix(edgeColor, orbitColor, orbitWeight);
+    posAngle = fract(atan(orbitDir.y, orbitDir.x) / 6.28318530718 + 0.5);
+  }
 
   // --- Dynamic Multi-Band Perimeter Motion ---
   float perimeterLight = 1.0;
@@ -268,12 +284,15 @@ void main() {
     float p2 = exp(-(d2 * d2) / max(2.0 * w2 * w2, 0.001)) * f2;
 
     float multiBand = max(p0, max(p1, p2));
-    perimeterLight = mix(0.12, 0.70, multiBand);
+    perimeterLight = mix(0.10, 0.80, multiBand);
   } else {
     perimeterLight = 0.45;
   }
   // Hover: light comes only from the cursor (computed whenever hover is fading in or out).
-  float cursorBeam = u_hoverTransition > 0.001 ? cursorBeamAt(bp, flowNormal, cLocal) : 0.0;
+  // The beam follows the overall form (outline normal blended with the direction from the center),
+  // so notches and concave corners (Tux's feet, gaps between panes) do not cut it into streaks.
+  vec2 beamNormal = normalize(flowNormal * 0.45 + radialDir * 0.55 + vec2(0.00001, 0.0));
+  float cursorBeam = u_hoverTransition > 0.001 ? cursorBeamAt(bp, beamNormal, cLocal) : 0.0;
   float hoverLight = mix(0.02, 1.0, cursorBeam);
 
   // Mode modulations (idle animation only; the cursor light stays steady)
@@ -304,9 +323,10 @@ void main() {
   float nearBand = pow(nearFade, 2.8);
   // 3. Idle: a tight halo hugging the outline. Hover: a longer glow that reaches toward the cursor
   //    (pixels between the shape and the cursor face it, so the beam lights them).
-  float idleGlow = nearBand * 0.30 + exp(-dg * 30.0) * 0.20 + exp(-dg * 12.0) * 0.05;
-  float hoverGlow = nearBand * 0.50 + exp(-dg * 14.0) * 0.38 +
-    exp(-dg * 5.0) * 0.10 * (1.0 - smoothstep(0.30, 0.90, dg));
+  float idleGlow = nearBand * 0.30 + exp(-dg * 34.0) * 0.24 + exp(-dg * 16.0) * 0.03;
+  idleGlow *= 1.0 - smoothstep(0.10, 0.32, dg);
+  float hoverGlow = nearBand * 0.50 + exp(-dg * 18.0) * 0.30 +
+    exp(-dg * 6.0) * 0.10 * (1.0 - smoothstep(0.25, 0.80, dg));
 
   // Soft glow is zero in gaps/holes (inside the envelope but outside the artwork) and fades where
   // the nearest real edge is much farther away than the envelope (sealed notches), so no plasma
@@ -316,8 +336,11 @@ void main() {
   float inGap = smoothstep(-0.003, -0.008, dEnvLocal);
   float glowMask = sealed * (1.0 - inGap);
   float hover = u_hoverTransition;
-  float idlePart = (idleGlow * glowMask + core * 0.55) * edgeLight;
-  float hoverPart = (hoverGlow * glowMask + core * 0.70) * hoverLight;
+  // Detail lines inside the silhouette stay quiet: the light belongs to the outer outline, so it reads
+  // as part of the object instead of shining out of its center.
+  float coreW = core * mix(1.0, 0.30, smoothstep(0.0, -0.012, dEnvLocal));
+  float idlePart = (idleGlow * glowMask + coreW * 0.55) * edgeLight;
+  float hoverPart = (hoverGlow * glowMask + coreW * 0.70) * hoverLight;
   float rimProfile = mix(idlePart, hoverPart, hover) * u_edgeIntensity;
 
   // Inside vs outside composition

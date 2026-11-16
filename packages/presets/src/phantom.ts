@@ -17,7 +17,7 @@ export const phantomScene: Scene = parseScene({
   meta: {
     id: 'retro-ghost',
     name: 'Phantom Arcade',
-    author: 'Glowframe Team',
+    author: 'Halorim Team',
     license: 'CC0-1.0',
     tags: ['arcade', 'retro', 'gaming', 'ghost'],
     description: 'Nostalgic 8-bit arcade phantom with neon spectral edge glow and reactive eyes',

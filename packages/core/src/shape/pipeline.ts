@@ -15,6 +15,8 @@ export interface ShapePipelineResult {
   readonly sdf: SdfData;
   readonly shape: Shape;
   readonly hitTest: (u: number, v: number) => number; // returns signed distance in pixels
+  /** Like hitTest, but against the sealed outer envelope: holes and gaps inside the logo count as inside. */
+  readonly hitTestEnvelope: (u: number, v: number) => number;
   /**
    * Interleaved [trueDistance, envelopeDistance] pairs in grid units, uploaded as an RG16F texture.
    * The envelope seals gaps/holes/notches so soft glow never appears inside empty space.
@@ -83,12 +85,12 @@ function buildVectorFields(
   groups: VectorGroup[],
   gridSize: number,
   maxDistance: number,
-): { sdf: SdfData; rgData: Float32Array } {
+): { sdf: SdfData; env: SdfData; rgData: Float32Array } {
   const sdf = buildVectorSdf(groups, gridSize, maxDistance, solidShape(shape), 0);
   const close = closeRadius(shape);
   const env =
     close === undefined ? sdf : buildVectorSdf(groups, gridSize, maxDistance, true, close);
-  return { sdf, rgData: interleave(sdf.floatData, env.floatData) };
+  return { sdf, env, rgData: interleave(sdf.floatData, env.floatData) };
 }
 
 function makeHitTest(
@@ -117,15 +119,23 @@ export function buildShapePipeline(
 ): ShapePipelineResult {
   const groups = vectorGroupsForShape(shape);
   let sdf: SdfData;
+  let env: SdfData;
   let rgData: Float32Array;
   if (groups) {
-    ({ sdf, rgData } = buildVectorFields(shape, groups, gridSize, maxDistance));
+    ({ sdf, env, rgData } = buildVectorFields(shape, groups, gridSize, maxDistance));
   } else {
     const rasterized = rasterizeShape(shape, gridSize, gridSize);
     sdf = computeSdf(rasterized.mask, gridSize, gridSize, maxDistance);
+    env = sdf;
     rgData = interleave(sdf.floatData, sdf.floatData);
   }
-  return { sdf, shape, hitTest: makeHitTest(sdf, gridSize, maxDistance), rgData };
+  return {
+    sdf,
+    shape,
+    hitTest: makeHitTest(sdf, gridSize, maxDistance),
+    hitTestEnvelope: makeHitTest(env, gridSize, maxDistance),
+    rgData,
+  };
 }
 
 /**
@@ -138,13 +148,21 @@ export async function buildShapePipelineAsync(
 ): Promise<ShapePipelineResult> {
   const groups = vectorGroupsForShape(shape);
   let sdf: SdfData;
+  let env: SdfData;
   let rgData: Float32Array;
   if (groups) {
-    ({ sdf, rgData } = buildVectorFields(shape, groups, gridSize, maxDistance));
+    ({ sdf, env, rgData } = buildVectorFields(shape, groups, gridSize, maxDistance));
   } else {
     const rasterized = rasterizeShape(shape, gridSize, gridSize);
     sdf = await computeSdfAsync(rasterized.mask, gridSize, gridSize, maxDistance);
+    env = sdf;
     rgData = interleave(sdf.floatData, sdf.floatData);
   }
-  return { sdf, shape, hitTest: makeHitTest(sdf, gridSize, maxDistance), rgData };
+  return {
+    sdf,
+    shape,
+    hitTest: makeHitTest(sdf, gridSize, maxDistance),
+    hitTestEnvelope: makeHitTest(env, gridSize, maxDistance),
+    rgData,
+  };
 }

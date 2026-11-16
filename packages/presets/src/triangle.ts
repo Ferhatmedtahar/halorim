@@ -5,7 +5,7 @@ export const triangleScene: Scene = parseScene({
   meta: {
     id: 'triangle-prism',
     name: 'Prism Triangle',
-    author: 'Glowframe Team',
+    author: 'Halorim Team',
     license: 'CC0-1.0',
     tags: ['minimal', 'dark', 'triangle'],
     description: 'Reference equilateral triangle with prismatic rim glow on black canvas',

@@ -2,130 +2,70 @@
 
 import { useState } from 'react';
 import type { Scene } from '@glowframe/schema';
-import { exportPng, exportSceneJson, exportHtmlPack, PRESET_RESOLUTIONS } from '@glowframe/export';
+import { Download } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 interface DownloadPanelProps {
   scene: Scene;
 }
 
-function saveBlob(blob: Blob, filename: string) {
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = filename;
-  a.click();
-  URL.revokeObjectURL(url);
+/** Outline of a plain triangle, for the built-in triangle scene that has no path of its own. */
+const TRIANGLE_PATH = 'M 50 15 L 85 80 L 15 80 Z';
+
+/** The wallpaper's shape as a plain SVG file, or `null` when the shape has no path to export. */
+function sceneToSvg(scene: Scene): string | null {
+  const { shape } = scene;
+  let d: string;
+  let viewBox: string;
+  if (shape.type === 'svg-path') {
+    d = shape.d;
+    viewBox = shape.viewBox.join(' ');
+  } else if (shape.type === 'preset') {
+    d = TRIANGLE_PATH;
+    viewBox = '0 0 100 100';
+  } else {
+    return null;
+  }
+  return (
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${viewBox}">\n` +
+    `  <path d="${d.replace(/"/g, '&quot;')}" fill="#000000"/>\n` +
+    `</svg>\n`
+  );
 }
 
 export default function DownloadPanel({ scene }: DownloadPanelProps) {
-  const [resolutionKey, setResolutionKey] = useState<keyof typeof PRESET_RESOLUTIONS>('FHD');
-  const [isExportingPng, setIsExportingPng] = useState(false);
-  const [isExportingHtml, setIsExportingHtml] = useState(false);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
+  const svg = sceneToSvg(scene);
 
-  const flash = (msg: string) => {
-    setStatusMessage(msg);
+  const handleDownload = () => {
+    if (!svg) return;
+    const url = URL.createObjectURL(new Blob([svg], { type: 'image/svg+xml' }));
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${scene.meta.id}.svg`;
+    a.click();
+    URL.revokeObjectURL(url);
+    setStatusMessage(`Saved ${scene.meta.id}.svg`);
     setTimeout(() => setStatusMessage(null), 3000);
-  };
-
-  const handleDownloadPng = async () => {
-    try {
-      setIsExportingPng(true);
-      setStatusMessage('Rendering frame');
-      const res = PRESET_RESOLUTIONS[resolutionKey];
-      const blob = await exportPng({ scene, width: res.width, height: res.height, timeMs: 1000 });
-      saveBlob(blob, `${scene.meta.id}-${res.width}x${res.height}.png`);
-      flash('PNG downloaded');
-    } catch (err) {
-      console.error('PNG export failed:', err);
-      flash('PNG export failed');
-    } finally {
-      setIsExportingPng(false);
-    }
-  };
-
-  const handleDownloadScene = () => {
-    try {
-      const json = exportSceneJson(scene);
-      saveBlob(new Blob([json], { type: 'application/json' }), `${scene.meta.id}.glowframe.json`);
-      flash('Scene file downloaded');
-    } catch (err) {
-      console.error('Scene export failed:', err);
-      flash('Scene export failed');
-    }
-  };
-
-  const handleDownloadHtmlPack = async () => {
-    try {
-      setIsExportingHtml(true);
-      setStatusMessage('Packaging wallpaper');
-      let bundledCoreJs: string | undefined;
-      try {
-        const res = await fetch('/glowframe-core.js');
-        if (res.ok) bundledCoreJs = await res.text();
-      } catch {
-        // Falls back to the CDN inside exportHtmlPack
-      }
-      const zipBytes = await exportHtmlPack({ scene, bundledCoreJs });
-      saveBlob(new Blob([zipBytes as BlobPart], { type: 'application/zip' }), `${scene.meta.id}-wallpaper.zip`);
-      flash('HTML pack downloaded');
-    } catch (err) {
-      console.error('HTML pack export failed:', err);
-      flash('HTML pack export failed');
-    } finally {
-      setIsExportingHtml(false);
-    }
   };
 
   return (
     <div>
       <h2 className="sr-only">Download</h2>
       <p className="border-b border-line px-5 py-3 text-sm text-muted sm:px-6" role="status" aria-live="polite">
-        {statusMessage ?? 'Pick the format that fits how you run wallpapers.'}
+        {statusMessage ?? 'For the Halorim desktop app on Linux and Windows.'}
       </p>
 
-      <div className="flex flex-col">
-        <div className="border-b border-line p-5 sm:p-6">
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <div className="text-[15px] font-medium">Still image</div>
-              <div className="text-sm text-muted">PNG rendered at the resolution you choose</div>
-            </div>
-            <Select value={resolutionKey} onValueChange={(v) => setResolutionKey(v as keyof typeof PRESET_RESOLUTIONS)}>
-              <SelectTrigger aria-label="Resolution" className="h-8 w-auto shrink-0 gap-2 px-3 text-[13px]">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {Object.entries(PRESET_RESOLUTIONS).map(([key, res]) => (
-                  <SelectItem key={key} value={key}>
-                    {res.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <Button variant="secondary" onClick={handleDownloadPng} disabled={isExportingPng} className="mt-3 w-full">
-            {isExportingPng ? 'Rendering' : 'Download PNG Still'}
-          </Button>
+      <div className="p-5 sm:p-6">
+        <div className="text-[15px] font-medium">Shape as SVG</div>
+        <div className="text-sm text-muted">
+          Open the tray icon in the desktop app, choose Load Custom SVG and pick this file.
         </div>
-
-        <div className="border-b border-line p-5 sm:p-6">
-          <div className="text-[15px] font-medium">Interactive pack</div>
-          <div className="text-sm text-muted">Offline HTML bundle for Lively Wallpaper, WebViews and browsers</div>
-          <Button onClick={handleDownloadHtmlPack} disabled={isExportingHtml} className="mt-3 w-full">
-            {isExportingHtml ? 'Packaging' : 'Download HTML Pack (.zip)'}
-          </Button>
-        </div>
-
-        <div className="p-5 sm:p-6">
-          <div className="text-[15px] font-medium">Desktop scene</div>
-          <div className="text-sm text-muted">Native file for the Halorim desktop app</div>
-          <Button variant="secondary" onClick={handleDownloadScene} className="mt-3 w-full">
-            Download .glowframe.json
-          </Button>
-        </div>
+        <Button onClick={handleDownload} disabled={!svg} className="mt-3 w-full">
+          <Download className="h-4 w-4" />
+          Download SVG
+        </Button>
+        {!svg ? <p className="mt-2 text-sm text-muted">This wallpaper has no outline to export.</p> : null}
       </div>
     </div>
   );

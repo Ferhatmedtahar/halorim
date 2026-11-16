@@ -23,16 +23,12 @@ export async function generateMetadata({ params }: PageProps) {
 
 const SETUP = [
   {
-    os: 'Linux',
-    body: 'Open the scene file in the Halorim desktop app. Works on X11 and on Wayland compositors with layer-shell.',
-  },
-  {
-    os: 'Windows',
-    body: 'Import the HTML pack into Lively Wallpaper or Wallpaper Engine, or use the desktop app.',
+    os: 'Linux and Windows',
+    body: 'This wallpaper is already built into the Halorim desktop app. Open the tray icon and pick it from Operating Systems, Linux Distros or Shapes.',
   },
   {
     os: 'Browser',
-    body: 'Unzip the pack and open index.html in any modern browser.',
+    body: 'The live preview above runs in any browser with WebGL2.',
   },
 ];
 
@@ -103,15 +99,14 @@ export default async function WallpaperDetailPage({ params }: PageProps) {
             </ul>
           </section>
 
-          <section aria-labelledby="studio" className="border-b border-line lg:border-b-0">
+          <section aria-labelledby="studio" className="flex flex-1 flex-col border-b border-line lg:border-b-0">
             <SectionBar label="Make it yours" id="studio" />
-            <div className="bg-hatch px-5 py-8 sm:px-6">
-              <div className="inline-block bg-bg pr-4">
-                <p className="text-sm text-muted">Change scale, rotation and glow in the shape studio.</p>
-                <Button asChild variant="secondary" className="mt-4">
-                  <Link href="/studio">Open the studio</Link>
-                </Button>
-              </div>
+            {/* Fills the rest of the column so it lines up with the sidebar. */}
+            <div className="bg-hatch flex-1 px-5 py-8 sm:px-6">
+              <p className="text-sm text-muted">Change the size and glow of any shape in the studio.</p>
+              <Button asChild variant="secondary" className="mt-4 bg-bg">
+                <Link href="/studio">Open the studio</Link>
+              </Button>
             </div>
           </section>
         </div>

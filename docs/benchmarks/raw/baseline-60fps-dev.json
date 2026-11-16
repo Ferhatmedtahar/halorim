@@ -1,0 +1,61 @@
+{
+  "label": "baseline-60fps-dev",
+  "date": "2026-11-16T00:46:21.764Z",
+  "durationSec": 20,
+  "system": {
+    "cpu": "AMD Ryzen 5 5600G with Radeon Graphics",
+    "threads": 12,
+    "memoryGb": 31,
+    "gpu": "NVIDIA GeForce RTX 4060, 595.99.02",
+    "kernel": "7.0.0-43-generic",
+    "session": "ubuntu:GNOME / wayland",
+    "monitors": ["1920x1080", "1920x1080"],
+    "webkitgtk": "2.52.6"
+  },
+  "build": "debug",
+  "total": {
+    "cpuAvg": 211.4,
+    "cpuP95": 251.8,
+    "cpuPerCoreOfMachine": 17.6,
+    "pssMbAvg": 681.6,
+    "pssMbMax": 1080.6
+  },
+  "compositor": {
+    "name": "gnome-shell",
+    "cpuAvg": 29.2
+  },
+  "processes": [
+    {
+      "pid": 214632,
+      "name": "glowframe-desktop",
+      "cpuAvg": 40.3,
+      "cpuP95": 50.9,
+      "pssMb": 97.8,
+      "rssMb": 230.1
+    },
+    {
+      "pid": 216396,
+      "name": "WebKitNetworkProcess",
+      "cpuAvg": 0.4,
+      "cpuP95": 4.7,
+      "pssMb": 19.1,
+      "rssMb": 60.9
+    },
+    {
+      "pid": 216406,
+      "name": "WebKitWebProcess",
+      "cpuAvg": 84.1,
+      "cpuP95": 118.3,
+      "pssMb": 270.7,
+      "rssMb": 405.9
+    },
+    {
+      "pid": 216412,
+      "name": "WebKitWebProcess",
+      "cpuAvg": 86.7,
+      "cpuP95": 119.3,
+      "pssMb": 294,
+      "rssMb": 429.1
+    }
+  ]
+}

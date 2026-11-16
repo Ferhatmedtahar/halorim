@@ -26,7 +26,6 @@ const CLOSE_GAPS: Record<string, number> = {
   centos: 24,
   gentoo: 12,
   manjaro: 12,
-  'mx-linux': 12,
   zorin: 14,
 };
 const DEFAULT_CLOSE_GAPS = 14;
@@ -49,7 +48,7 @@ export function createLogoScene(def: LogoDef): Scene {
     meta: {
       id: def.id,
       name: def.name,
-      author: 'Glowframe Team',
+      author: 'Halorim Team',
       license: 'CC0-1.0',
       tags: [...def.tags],
       description: `${def.description} Unofficial fan artwork; the logo is a trademark of its owner.`,

@@ -134,14 +134,10 @@ describe('Gallery E2E & Performance Acceptance Tests', () => {
     const canvas = page.locator('canvas');
     expect(await canvas.isVisible()).toBe(true);
 
-    // Verify download panel renders all 3 export options
-    const pngBtn = page.locator('button:has-text("Download PNG Still")');
-    const htmlBtn = page.locator('button:has-text("Download HTML Pack (.zip)")');
-    const jsonBtn = page.locator('button:has-text("Download .glowframe.json")');
-
-    expect(await pngBtn.isVisible()).toBe(true);
-    expect(await htmlBtn.isVisible()).toBe(true);
-    expect(await jsonBtn.isVisible()).toBe(true);
+    // The download panel offers one export: the shape as an SVG for the desktop app
+    expect(await page.locator('button:has-text("Download SVG")').isVisible()).toBe(true);
+    expect(await page.locator('button:has-text("Download HTML Pack")').count()).toBe(0);
+    expect(await page.locator('button:has-text("Download .glowframe.json")').count()).toBe(0);
 
     // Navigate back to gallery and ensure canvas is disposed without crashing
     await page.click('text=Back to Gallery');

@@ -69,9 +69,7 @@ pub fn create_tray(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
         ("zorin", "Zorin OS"),
         ("void-linux", "Void Linux"),
         ("endeavouros", "EndeavourOS"),
-        ("mx-linux", "MX Linux"),
         ("rocky-linux", "Rocky Linux"),
-        ("garuda", "Garuda Linux"),
         ("parrot", "Parrot OS"),
         ("artix", "Artix Linux"),
     ];

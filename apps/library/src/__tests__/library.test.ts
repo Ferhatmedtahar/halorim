@@ -81,7 +81,7 @@ describe('Library App Architecture & Gallery Constraints', () => {
     if (fs.existsSync(aboutHtmlPath)) {
       const html = fs.readFileSync(aboutHtmlPath, 'utf-8');
       expect(html).toContain('>Windows<');
-      expect(html).toContain('Lively Wallpaper');
+      expect(html).toContain('Load Custom SVG');
       expect(html).toContain('>Linux<');
       expect(html).toContain('layer-shell');
       expect(html).toContain('GNOME');

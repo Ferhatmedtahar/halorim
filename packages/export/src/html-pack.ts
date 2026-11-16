@@ -25,8 +25,34 @@ Controls:
 - Automatically eases into an idle orbit after 3 seconds of inactivity.
 `;
 
-export function generateStandaloneHtml(scene: Scene, coreJsPath = './glowframe-core.js'): string {
+/** Base64 of raw bytes, chunked so large bundles do not overflow the call stack. Works in browsers and Node. */
+function toBase64(bytes: Uint8Array): string {
+  let binary = '';
+  const chunk = 0x8000;
+  for (let i = 0; i < bytes.length; i += chunk) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + chunk));
+  }
+  return btoa(binary);
+}
+
+/**
+ * Builds the wallpaper page.
+ *
+ * With `inlineCoreJs`, the renderer is embedded in the page itself. That matters because browsers (and Lively
+ * Wallpaper) refuse to load an external module script from a file:// page, so a pack that imports
+ * `./glowframe-core.js` shows a black screen when index.html is opened from disk.
+ */
+export function generateStandaloneHtml(
+  scene: Scene,
+  coreJsPath = './glowframe-core.js',
+  inlineCoreJs?: string,
+): string {
   const sceneJson = JSON.stringify(scene, null, 2);
+  const loadCore = inlineCoreJs
+    ? `const coreBytes = Uint8Array.from(atob('${toBase64(strToU8(inlineCoreJs))}'), (c) => c.charCodeAt(0));
+    const coreUrl = URL.createObjectURL(new Blob([coreBytes], { type: 'text/javascript' }));
+    const { createRenderer, BrowserInput } = await import(coreUrl);`
+    : `const { createRenderer, BrowserInput } = await import('${coreJsPath}');`;
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -57,7 +83,7 @@ ${sceneJson}
   </script>
 
   <script type="module">
-    import { createRenderer, BrowserInput } from '${coreJsPath}';
+    ${loadCore}
 
     const canvas = document.getElementById('wallpaper-canvas');
     const sceneData = JSON.parse(document.getElementById('glowframe-scene').textContent);
@@ -90,7 +116,7 @@ export async function exportHtmlPack(options: ExportHtmlPackOptions): Promise<Ui
   const coreImportPath = options.bundledCoreJs
     ? './glowframe-core.js'
     : 'https://cdn.jsdelivr.net/npm/@glowframe/core@0.6.0/dist/index.js';
-  const htmlContent = generateStandaloneHtml(validatedScene, coreImportPath);
+  const htmlContent = generateStandaloneHtml(validatedScene, coreImportPath, options.bundledCoreJs);
 
   const files: Record<string, Uint8Array> = {
     'index.html': strToU8(htmlContent),

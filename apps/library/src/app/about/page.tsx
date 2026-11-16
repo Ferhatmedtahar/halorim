@@ -1,7 +1,6 @@
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { SITE } from '@/lib/site';
-import SectionBar from '@/components/SectionBar';
 
 export const metadata = {
   title: 'Guide | Halorim',
@@ -11,7 +10,6 @@ export const metadata = {
 function Section({ id, title, children }: { id: string; title: string; children: React.ReactNode }) {
   return (
     <section aria-labelledby={id} className="border-b border-line">
-      <SectionBar label="Guide" />
       <div className="grid md:grid-cols-[220px_1fr]">
         <h2 id={id} className="border-b border-line px-5 py-6 text-2xl font-medium tracking-[-0.03em] sm:px-6 md:border-b-0 md:border-r">
           {title}
@@ -24,19 +22,6 @@ function Section({ id, title, children }: { id: string; title: string; children:
 
 function Code({ children }: { children: React.ReactNode }) {
   return <code className="border border-line bg-raised px-1.5 py-0.5 font-mono text-[13px] text-fg">{children}</code>;
-}
-
-function Steps({ items }: { items: React.ReactNode[] }) {
-  return (
-    <ol className="flex flex-col gap-2 border border-line bg-surface p-5 text-sm">
-      {items.map((item, i) => (
-        <li key={i} className="flex gap-3">
-          <span className="w-4 shrink-0 font-mono text-muted tabular-nums">{i + 1}</span>
-          <span className="text-fg/90">{item}</span>
-        </li>
-      ))}
-    </ol>
-  );
 }
 
 export default function AboutPage() {
@@ -72,9 +57,10 @@ export default function AboutPage() {
             </p>
           </div>
           <div>
-            <div className="font-medium text-fg">Wayland with layer-shell</div>
+            <div className="font-medium text-fg">Other Wayland desktops</div>
             <p className="mt-1 text-sm">
-              On Hyprland, Sway and KDE Plasma 6, Halorim attaches to the background layer.
+              On Hyprland, Sway and KDE Plasma, Halorim runs through Xwayland as a window behind your others. It does
+              not use the layer-shell protocol yet, so how cleanly it sits behind windows depends on your compositor.
             </p>
           </div>
           <div>
@@ -88,33 +74,34 @@ export default function AboutPage() {
 
         <Section id="windows" title="Windows">
           <p>
-            Use the desktop app from the latest release, or host a wallpaper in{' '}
+            Download the desktop app from the{' '}
             <a
-              href="https://rocksdanister.github.io/lively/"
+              href={SITE.releases}
               target="_blank"
               rel="noreferrer"
               className="text-fg underline underline-offset-4"
             >
-              Lively Wallpaper
+              latest release
             </a>
-            .
+            . It draws the wallpaper behind your desktop icons. Pick a wallpaper from the tray icon menu.
           </p>
-          <Steps
-            items={[
-              <>Open a wallpaper in the library and download the HTML pack (.zip).</>,
-              <>Extract the zip to a folder.</>,
-              <>In Lively Wallpaper, choose Add Wallpaper.</>,
-              <>
-                Select <Code>index.html</Code> from the extracted folder and save.
-              </>,
-            ]}
-          />
+        </Section>
+
+        <Section id="custom" title="Your own shape">
+          <p>
+            Make a wallpaper from any SVG on Linux or Windows. Pick or upload a shape in the Studio, or download any
+            wallpaper from the library as an SVG. Then open the Halorim tray icon, choose Load Custom SVG and select the
+            file.
+          </p>
+          <p>
+            The desktop app reads the shape&apos;s outline and applies its own glow, so colour and glow settings come from
+            the tray menu, not from the file.
+          </p>
         </Section>
 
         <Section id="browser" title="Browser">
           <p>
-            Every wallpaper runs in any browser with WebGL2. Unzip the HTML pack and open <Code>index.html</Code>, or
-            use the live preview on each wallpaper page.
+            Every wallpaper page has a live preview that runs in any browser with WebGL2.
           </p>
         </Section>
 

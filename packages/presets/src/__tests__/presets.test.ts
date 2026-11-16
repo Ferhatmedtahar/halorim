@@ -13,7 +13,7 @@ import { parseScene } from '@glowframe/schema';
 
 describe('@glowframe/presets', () => {
   it('exports the triangle, popular OS logos and generic shapes as valid scenes', () => {
-    expect(ALL_PRESET_IDS.length).toBeGreaterThanOrEqual(30);
+    expect(ALL_PRESET_IDS.length).toBeGreaterThanOrEqual(28);
 
     for (const scene of [
       triangleScene,

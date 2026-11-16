@@ -4,23 +4,21 @@ import '@fontsource-variable/inter';
 import './globals.css';
 import { SITE } from '@/lib/site';
 import Logo from '@/components/Logo';
-import MobileNav from '@/components/MobileNav';
+import Navbar from '@/components/Navbar';
 
 export const metadata: Metadata = {
   title: 'Halorim: live wallpapers with light that follows your cursor',
   description:
     'Open-source live wallpaper engine. Real-time prismatic rim glow, a library of wallpapers and a shape studio, for Linux, Windows and macOS.',
+  icons: {
+    icon: [
+      { url: '/favicon.ico', sizes: '48x48' },
+      { url: '/favicon.svg', type: 'image/svg+xml' },
+    ],
+    apple: '/apple-touch-icon.png',
+  },
+  manifest: '/site.webmanifest',
 };
-
-const NAV = [
-  { href: '/#library', label: 'Library' },
-  { href: '/studio', label: 'Studio' },
-  { href: '/about', label: 'Guide' },
-  { href: '/#download', label: 'Download' },
-];
-
-const CELL =
-  'hidden h-14 items-center border-l border-line px-5 font-mono text-[11px] uppercase tracking-[0.14em] text-muted transition-colors duration-fast ease-out hover:bg-raised hover:text-fg';
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -28,37 +26,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body className="min-h-screen bg-bg text-fg antialiased">
         {/* The whole site lives inside one framed column: hairlines left and right, cells butted together. */}
         <div className="mx-auto flex min-h-screen max-w-site flex-col border-x border-line">
-          <header className="sticky top-0 z-50 border-b border-line bg-bg/90 backdrop-blur-md">
-            <div className="flex h-14 items-stretch justify-between">
-              <Link
-                href="/"
-                className="flex items-center gap-2.5 px-5 sm:px-6"
-                aria-label="Halorim home"
-              >
-                <Logo />
-                <span className="text-[15px] font-medium tracking-tight">Halorim</span>
-              </Link>
-
-              <nav className="flex items-stretch" aria-label="Main">
-                {NAV.map((item) => (
-                  <Link key={item.href} href={item.href} className={`${CELL} sm:flex`}>
-                    {item.label}
-                  </Link>
-                ))}
-                <a href={SITE.repo} target="_blank" rel="noreferrer" className={`${CELL} md:flex`}>
-                  GitHub
-                </a>
-                <Link
-                  href="/#download"
-                  className="flex items-center border-l border-line bg-fg px-5 font-mono text-[11px] font-medium uppercase tracking-[0.14em] text-bg transition-colors duration-fast ease-out hover:bg-white"
-                >
-                  Get the app
-                </Link>
-                <MobileNav items={NAV} repo={SITE.repo} />
-              </nav>
-            </div>
-            <div className="line-run h-px bg-line" aria-hidden="true" />
-          </header>
+          <Navbar repo={SITE.repo} />
 
           <main className="flex-1">{children}</main>
 

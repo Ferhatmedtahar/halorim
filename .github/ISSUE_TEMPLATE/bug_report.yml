@@ -1,0 +1,41 @@
+name: Bug report
+description: Something is broken or behaves wrongly
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you expected and what you saw instead.
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+    validations:
+      required: true
+  - type: dropdown
+    id: component
+    attributes:
+      label: Component
+      options: [Desktop app, GNOME extension, Web library / studio, Core renderer, Other]
+    validations:
+      required: true
+  - type: input
+    id: env
+    attributes:
+      label: OS, desktop and session
+      placeholder: Ubuntu 26.04, GNOME, Wayland
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Halorim version or commit
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: For desktop issues, paste `~/.config/glowframe/glowframe.log`.
+      render: text

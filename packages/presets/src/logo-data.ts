@@ -187,28 +187,12 @@ export const LOGOS: readonly LogoDef[] = [
     description: "The EndeavourOS mark in purple and orange.",
   },
   {
-    id: "mx-linux",
-    name: "MX Linux",
-    d: "M12.001 13.301l3.277 3.819-.75.9-2.133-2.521-1.131-1.338.737-.86zM24 2.41v19.182c0 .655-.531 1.186-1.186 1.186H1.186A1.186 1.186 0 0 1 0 21.591V2.409c0-.655.531-1.186 1.186-1.186h21.628c.655 0 1.186.53 1.186 1.186zm-2.241 17.09l-2.116-2.542-2.115-2.541-.586.704-3.25-3.788 4.913-5.73-1.175-1.008-4.76 5.549-4.743-5.527-1.947 1.67 5 5.827-.73.851-1.24-1.465-3.384 4-3.385 4h19.518z",
-    palette: ["#ffffff", "#e2e8f0", "#ffffff", "#cbd5e1"],
-    tags: ["linux", "mx", "logo", "distro", "minimal"],
-    description: "The MX Linux badge in silver light.",
-  },
-  {
     id: "rocky-linux",
     name: "Rocky Linux",
     d: "M23.332 15.957c.433-1.239.668-2.57.668-3.957 0-6.627-5.373-12-12-12S0 5.373 0 12c0 3.28 1.315 6.251 3.447 8.417L15.62 8.245l3.005 3.005zm-2.192 3.819l-5.52-5.52L6.975 22.9c1.528.706 3.23 1.1 5.025 1.1 3.661 0 6.94-1.64 9.14-4.224z",
     palette: ["#10b981", "#34d399", "#6ee7b7", "#ffffff"],
     tags: ["linux", "rocky", "logo", "distro", "enterprise"],
     description: "The Rocky Linux mark in green.",
-  },
-  {
-    id: "garuda",
-    name: "Garuda Linux",
-    d: "M10.24 3.179C6.82 6.579 3.366 10.064 0 13.465c2.4 2.406 4.889 4.898 7.319 7.332l7.504.024 6.334-6.316-13.754-.012-1.525 1.54 11.512.024-3.198 3.197H7.956L2.172 13.47l8.74-8.74h6.284l4.815 4.815-7.501-.01v-2.12l-3.68 3.68c3.873.004 7.746.003 11.62 0v2.102l1.55-1.55-.003-2.306-6.16-6.159z",
-    palette: ["#8b5cf6", "#c084fc", "#ffffff", "#a78bfa"],
-    tags: ["linux", "garuda", "logo", "distro"],
-    description: "The Garuda Linux eagle in violet.",
   },
   {
     id: "parrot",

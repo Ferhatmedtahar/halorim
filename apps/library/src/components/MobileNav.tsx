@@ -6,7 +6,7 @@ import { Menu } from 'lucide-react';
 import { Sheet, SheetContent, SheetTitle, SheetDescription, SheetTrigger, SheetClose } from '@/components/ui/sheet';
 
 const ROW =
-  'block border-b border-line px-5 py-4 font-mono text-[12px] uppercase tracking-[0.14em] text-muted transition-colors duration-fast ease-out hover:bg-raised hover:text-fg';
+  'block border-b border-line px-5 py-4 text-base text-muted transition-colors duration-fast ease-out hover:bg-raised hover:text-fg';
 
 export default function MobileNav({ items, repo }: { items: { href: string; label: string }[]; repo: string }) {
   const [open, setOpen] = useState(false);

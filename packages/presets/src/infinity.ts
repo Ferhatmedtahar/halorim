@@ -18,7 +18,7 @@ export const infinityScene: Scene = parseScene({
   meta: {
     id: 'infinity-loop',
     name: 'Infinity Lemniscate',
-    author: 'Glowframe Team',
+    author: 'Halorim Team',
     license: 'CC0-1.0',
     tags: ['minimal', 'geometry', 'math', 'loop'],
     description: 'Harmonic infinity lemniscate ribbon with flowing prismatic light waves',
