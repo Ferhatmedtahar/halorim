@@ -1,6 +1,6 @@
 import { createRenderer } from '@glowframe/core';
 import { PRESET_SCENES, triangleScene } from '@glowframe/presets';
-import { type Scene, parseScene } from '@glowframe/schema';
+import { type Scene, parseScene, decodeSvgSettings } from '@glowframe/schema';
 import { listen } from '@tauri-apps/api/event';
 import { invoke } from '@tauri-apps/api/core';
 import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow';
@@ -94,6 +94,8 @@ interface SharedSettings {
   background?: string;
   /** Object (silhouette) color. Unset = the preset's own (black). */
   fill?: string;
+  /** Custom shape loaded from an SVG file (kept so it survives a restart). Wins over presetId. */
+  customSvg?: string;
 }
 const SETTINGS_KEY = 'glowframe_settings';
 function loadSettings(): SharedSettings {
@@ -133,7 +135,8 @@ function syncFromStorage() {
     stored.glow === settings.glow &&
     stored.speed === settings.speed &&
     stored.background === settings.background &&
-    stored.fill === settings.fill
+    stored.fill === settings.fill &&
+    stored.customSvg === settings.customSvg
   ) {
     return;
   }
@@ -142,14 +145,57 @@ function syncFromStorage() {
   settings.speed = stored.speed;
   settings.background = stored.background;
   settings.fill = stored.fill;
+  settings.customSvg = stored.customSvg;
   syncPageBackground();
-  const target = stored.presetId ? PRESET_SCENES[stored.presetId] : undefined;
-  void applyScene(target ?? baseScene);
+  void applyScene(savedScene() ?? baseScene);
 }
 window.addEventListener('storage', (e) => {
   if (e.key === SETTINGS_KEY) syncFromStorage();
 });
 setInterval(syncFromStorage, 1000);
+
+/**
+ * Scene for a custom SVG. Glow settings embedded by the Studio export (see decodeSvgSettings) are
+ * used when present; anything missing falls back to the same look as the built-in logos.
+ */
+function customSvgScene(svg: string): Scene {
+  const embedded = decodeSvgSettings(svg);
+  const edge = embedded?.edge ?? {};
+  return parseScene({
+    ...triangleScene,
+    meta: { ...triangleScene.meta, id: 'custom-svg', name: 'Custom SVG', tags: ['custom'] },
+    shape: {
+      type: 'svg-file',
+      asset: svg,
+      fillHoles: false,
+      closeGaps: 14,
+      position: [0.5, 0.52],
+      scale: embedded?.scale ?? 0.34,
+      rotation: 0,
+    },
+    edge: {
+      width: edge.width ?? 0.0045,
+      falloff: edge.falloff ?? 0.045,
+      intensity: edge.intensity ?? 1.45,
+      dispersion: edge.dispersion ?? 0.38,
+      colorFlow: 'surface',
+    },
+    palettes: embedded?.palette ? [embedded.palette, ...triangleScene.palettes] : triangleScene.palettes,
+    mode: { id: 'rotate', params: { speed: embedded?.speed ?? 0.05 } },
+  });
+}
+
+/** The scene the saved settings point at: a custom SVG first, then a named preset. */
+function savedScene(): Scene | undefined {
+  if (settings.customSvg) {
+    try {
+      return customSvgScene(settings.customSvg);
+    } catch (err) {
+      console.error('[Glowframe] Saved custom SVG could not be loaded:', err);
+    }
+  }
+  return settings.presetId ? PRESET_SCENES[settings.presetId] : undefined;
+}
 
 /** Single path for every scene change: shape/glow/speed shared, palette stays per-screen. */
 function applyScene(scene: Scene): boolean {
@@ -193,8 +239,7 @@ function scheduleSnapshot() {
   }, 1500);
 }
 
-const startScene = settings.presetId ? PRESET_SCENES[settings.presetId] : undefined;
-applyScene(startScene ?? currentScene);
+applyScene(savedScene() ?? currentScene);
 
 // Fallback local pointer events for development / interactive window mode
 canvas.addEventListener('pointermove', (e) => {
@@ -357,21 +402,23 @@ listen<{ speed: number }>('glowframe://set-rotation-speed', (event) => {
 }).catch(() => {});
 
 listen<{ svg: string }>('glowframe://load-custom-svg', (event) => {
-  const next = parseScene({
-    ...baseScene,
-    meta: { ...baseScene.meta, id: 'custom-svg', name: 'Custom SVG', tags: ['custom'] },
-    shape: {
-      type: 'svg-file',
-      asset: event.payload.svg,
-      fillHoles: false,
-      position: baseScene.shape.position,
-      scale: baseScene.shape.scale,
-      rotation: 0,
-    },
-    edge: { ...baseScene.edge, colorFlow: 'surface' },
-  });
+  const svg = event.payload.svg;
+  const embedded = decodeSvgSettings(svg);
+  let next: Scene;
+  try {
+    next = customSvgScene(svg);
+  } catch (err) {
+    console.error('[Glowframe] Could not load custom SVG:', err);
+    return;
+  }
+  // Settings carried by the file win over the tray's glow/speed until the user changes them again.
+  if (embedded?.edge?.intensity !== undefined) settings.glow = undefined;
+  if (embedded?.speed !== undefined) settings.speed = undefined;
+  // A file with its own palette starts on that palette on every screen.
+  if (embedded?.palette) localStorage.setItem(storageKey, '0');
   if (applyScene(next)) {
     settings.presetId = undefined; // custom art is not a named preset
+    settings.customSvg = svg;
     saveSettings();
   }
 }).catch(() => {});
@@ -381,6 +428,7 @@ listen<{ presetId?: string; sceneData?: unknown }>('glowframe://set-scene', (eve
     const next = PRESET_SCENES[event.payload.presetId];
     if (next && applyScene(next)) {
       settings.presetId = event.payload.presetId;
+      settings.customSvg = undefined;
       saveSettings();
     }
   } else if (event.payload.sceneData) {

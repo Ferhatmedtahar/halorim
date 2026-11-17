@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import type { Scene } from '@glowframe/schema';
-import { parseScene } from '@glowframe/schema';
+import { parseScene, encodeSvgSettings } from '@glowframe/schema';
 import { LOGOS, INFINITY_SVG_PATH, PHANTOM_SVG_PATH } from '@glowframe/presets';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -281,8 +281,9 @@ export default function CustomStudio({ initialScene }: CustomStudioProps) {
     if (file) readSvgFile(file);
   };
 
-  // Export: a plain SVG of the shape. The desktop app's "Load Custom SVG" reads the viewBox and path,
-  // then lights the edge itself, so nothing else needs to travel with the file.
+  // Export: the shape plus its glow settings in one SVG. The settings live in a <metadata> block that
+  // image viewers ignore; the desktop app's "Load Custom SVG" reads them (size, rim, falloff,
+  // intensity, dispersion, speed, palette) and falls back to its defaults for anything missing.
   const handleDownloadSvg = () => {
     const d = svgPath.trim();
     if (!d) {
@@ -290,8 +291,16 @@ export default function CustomStudio({ initialScene }: CustomStudioProps) {
       setTimeout(() => setStatusMessage(null), 3000);
       return;
     }
+    const metadata = encodeSvgSettings({
+      version: 1,
+      scale,
+      edge: { width: edgeWidth, falloff, intensity, dispersion },
+      speed: rotationSpeed,
+      palette: currentScene.palettes[0],
+    });
     const svg =
       `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${viewBoxW} ${viewBoxH}">\n` +
+      `  ${metadata}\n` +
       `  <path d="${d.replace(/"/g, '&quot;')}" fill="#000000"/>\n` +
       `</svg>\n`;
     const url = URL.createObjectURL(new Blob([svg], { type: 'image/svg+xml' }));
@@ -368,8 +377,9 @@ export default function CustomStudio({ initialScene }: CustomStudioProps) {
               Export
             </h2>
             <p className="mt-1 text-sm text-muted">
-              Saves your shape as <span className="font-mono text-[13px] text-fg">{currentScene.meta.id}.svg</span>.
-              In the desktop tray menu, choose Load Custom SVG and pick the file.
+              Saves your shape as <span className="font-mono text-[13px] text-fg">{currentScene.meta.id}.svg</span>,
+              together with its size, glow, speed and colors. In the desktop tray menu, choose Load Custom SVG and
+              pick the file: it looks the same as here.
             </p>
             <Button className="mt-4" onClick={handleDownloadSvg}>
               <Download className="h-4 w-4" />

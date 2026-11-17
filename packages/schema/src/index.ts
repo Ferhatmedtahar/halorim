@@ -44,3 +44,10 @@ export { migrate, parseScene, safeParseScene } from './migrate.js';
 export { exportJsonSchema } from './export-json-schema.js';
 export { exampleScene } from './example.js';
 export { z } from 'zod';
+export {
+  SvgSettingsSchema,
+  SVG_SETTINGS_ID,
+  encodeSvgSettings,
+  decodeSvgSettings,
+  type SvgSettings,
+} from './svg-settings.js';
