@@ -273,7 +273,9 @@ mod linux {
             .map(|(v,)| v);
 
         let status = match running_version {
-            Some(v) if v >= BRIDGE_VERSION && installed != InstallOutcome::Updated => {
+            // Same bridge version already running: it works as is. Freshly written files (e.g. a new
+            // display name) are picked up quietly at the next login, no need to bother the user.
+            Some(v) if v >= BRIDGE_VERSION => {
                 subscribe_pointer(&conn, app);
                 super::LIVE.store(true, std::sync::atomic::Ordering::Relaxed);
                 // A still snapshot left as the GNOME background by an earlier run is not needed.
@@ -309,8 +311,8 @@ mod linux {
                 );
                 let _ = std::process::Command::new("notify-send")
                     .args([
-                        "--app-name=Glowframe",
-                        "Glowframe: log out and back in once",
+                        "--app-name=Halorim",
+                        "Halorim: log out and back in once",
                         "The desktop integration was updated. After the next login the live wallpaper \
                          stays under your desktop icons and keeps moving in the overview.",
                     ])

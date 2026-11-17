@@ -202,7 +202,7 @@ pub fn create_tray(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
         crate::autostart::is_enabled(),
         None::<&str>,
     )?;
-    let quit_item = MenuItem::with_id(app, "quit", "Quit Glowframe", true, None::<&str>)?;
+    let quit_item = MenuItem::with_id(app, "quit", "Quit Halorim", true, None::<&str>)?;
 
     let root_menu = Menu::with_items(
         app,
@@ -228,7 +228,7 @@ pub fn create_tray(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
     let tray_icon = tauri::include_image!("icons/32x32.png");
 
     let tray_builder = TrayIconBuilder::with_id("glowframe-tray")
-        .tooltip("Glowframe")
+        .tooltip("Halorim")
         .icon(tray_icon)
         .menu(&root_menu)
         .show_menu_on_left_click(true);

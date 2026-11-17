@@ -1,11 +1,13 @@
-//! Start Glowframe automatically when the user logs in (XDG autostart, used by GNOME, KDE, XFCE...).
+//! Start Halorim automatically when the user logs in (XDG autostart, used by GNOME, KDE, XFCE...).
 //!
-//! On by default: the first launch creates ~/.config/autostart/glowframe.desktop. Turning it off in
+//! On by default: the first launch creates ~/.config/autostart/halorim.desktop. Turning it off in
 //! the tray removes that file and remembers the choice, so it is not created again.
 
 use std::path::{Path, PathBuf};
 
-const DESKTOP_FILE: &str = "glowframe.desktop";
+const DESKTOP_FILE: &str = "halorim.desktop";
+/// Name used by builds before the Halorim rename; removed so the app never starts twice.
+const OLD_DESKTOP_FILE: &str = "glowframe.desktop";
 const OPT_OUT_FILE: &str = "autostart-disabled";
 
 fn config_home() -> PathBuf {
@@ -41,7 +43,7 @@ pub fn desktop_entry(exe: &Path) -> String {
     format!(
         "[Desktop Entry]\n\
          Type=Application\n\
-         Name=Glowframe\n\
+         Name=Halorim\n\
          Comment=Live interactive wallpaper\n\
          Exec={}\n\
          Terminal=false\n\
@@ -59,6 +61,7 @@ pub fn is_enabled() -> bool {
 /// Called on every launch: (re)writes the entry unless the user turned autostart off. Rewriting keeps
 /// the Exec path correct when the binary moved.
 pub fn ensure_default() {
+    let _ = std::fs::remove_file(config_home().join("autostart").join(OLD_DESKTOP_FILE));
     if opt_out_path().exists() {
         return;
     }
