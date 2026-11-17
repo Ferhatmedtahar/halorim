@@ -120,7 +120,7 @@ export default function WallpaperPlayer({ scene }: WallpaperPlayerProps) {
         </Button>
       </div>
 
-      <p className="pointer-events-none absolute bottom-3 left-4 bg-black/60 px-1.5 font-mono text-[11px] uppercase tracking-[0.12em] text-muted">
+      <p className="pointer-events-none absolute bottom-3 left-4 bg-black/60 px-1.5 text-[13px] text-muted">
         Move the cursor to steer the light. Click to change colors.
       </p>
     </div>

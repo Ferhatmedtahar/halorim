@@ -1,3 +1,4 @@
+pub mod autostart;
 pub mod background;
 pub mod gnome_bridge;
 pub mod linux_host;
@@ -19,6 +20,12 @@ fn save_snapshot(request: tauri::ipc::Request<'_>) -> Result<(), String> {
         .unwrap_or(0);
     if monitor != 0 {
         return Ok(()); // GNOME uses a single background image: monitor 0 is canonical.
+    }
+    if gnome_bridge::is_live() {
+        // The Shell extension shows the live wallpaper everywhere (overview included). Writing a still
+        // picture into the user's background settings would only risk leaving a frozen image behind
+        // if Glowframe is killed (e.g. at shutdown).
+        return Ok(());
     }
     match request.body() {
         tauri::ipc::InvokeBody::Raw(bytes) => {
@@ -62,6 +69,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![save_snapshot, log_line])
         .setup(move |app| {
             let handle = app.handle();
+            autostart::ensure_default();
             let _ = tray::create_tray(handle);
 
             #[cfg(target_os = "linux")]

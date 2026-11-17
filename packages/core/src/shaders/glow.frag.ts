@@ -89,17 +89,33 @@ vec2 toLocal(vec2 uv, float aspect, float safeScale) {
   return rot / safeScale;
 }
 
-// Cursor light: the outline brightens only where it faces the cursor, strongest on the part closest
-// to it. Edges facing away stay dark, so the light clearly follows the pointer around the shape.
-float cursorBeamAt(vec2 bp, vec2 nrm, vec2 cLocal) {
-  vec2 toC = cLocal - bp;
-  float dc = length(toC);
-  // Softened direction: fades out smoothly (instead of flipping) when the cursor touches the outline.
-  vec2 dirC = toC / sqrt(dc * dc + 0.0036);
-  // Soft, wide lobe: the lit side fades out gradually around curves instead of stopping at a line.
-  float cosA = dot(nrm, dirC);
-  float facing = pow(smoothstep(-0.25, 1.0, cosA), max(u_cursorSharpness, 1.0) * 0.8);
-  return facing * (0.30 + 0.70 * exp(-dc * 1.8));
+// Distance (local units) from a point to the shape's outer envelope; same field the glow uses.
+float envelopeDistance(vec2 q) {
+  if (u_shapeType == 1) {
+    return sdfTriangle(q, vec2(0.0, -0.40414518843), vec2(0.35, 0.20207259422), vec2(-0.35, 0.20207259422));
+  } else if (u_shapeType == 2) {
+    return length(q) - 0.35;
+  } else if (u_shapeType == 3) {
+    return sdHexagon(q, 0.35);
+  }
+  float r = length(q);
+  const float rMax = 0.49;
+  vec2 qs = (r > rMax) ? q * (rMax / r) : q;
+  return texture(u_sdf, qs + vec2(0.5)).g + max(r - rMax, 0.0);
+}
+
+// Cursor light lives ON the outline: the stretch of outline nearest to the cursor lights up and the
+// light fades along the object away from it. It depends on distances only (never on the outline's
+// direction, which flips inside notches such as Tux's feet and would cut the light into streaks).
+//   q       this pixel (local units);  cLocal  cursor;  cDist  cursor's own distance to the outline
+float cursorBeamAt(vec2 q, vec2 cLocal, float cDist) {
+  float away = max(cDist, 0.0);
+  // How much farther this pixel is from the cursor than the closest point of the outline.
+  float extra = max(length(cLocal - q) - away, 0.0);
+  float spread = 0.13 + 0.06 * away;                // farther cursor -> slightly wider patch
+  float near = exp(-(extra * extra) / (2.0 * spread * spread));
+  float strength = 0.35 + 0.65 * exp(-away * 1.4);
+  return near * strength;
 }
 
 float dLocalForGap(float d, float safeScale) { return d / safeScale; }
@@ -289,10 +305,10 @@ void main() {
     perimeterLight = 0.45;
   }
   // Hover: light comes only from the cursor (computed whenever hover is fading in or out).
-  // The beam follows the overall form (outline normal blended with the direction from the center),
-  // so notches and concave corners (Tux's feet, gaps between panes) do not cut it into streaks.
-  vec2 beamNormal = normalize(flowNormal * 0.45 + radialDir * 0.55 + vec2(0.00001, 0.0));
-  float cursorBeam = u_hoverTransition > 0.001 ? cursorBeamAt(bp, beamNormal, cLocal) : 0.0;
+  float cursorBeam = 0.0;
+  if (u_hoverTransition > 0.001) {
+    cursorBeam = cursorBeamAt(p, cLocal, envelopeDistance(cLocal));
+  }
   float hoverLight = mix(0.02, 1.0, cursorBeam);
 
   // Mode modulations (idle animation only; the cursor light stays steady)
@@ -325,8 +341,21 @@ void main() {
   //    (pixels between the shape and the cursor face it, so the beam lights them).
   float idleGlow = nearBand * 0.30 + exp(-dg * 34.0) * 0.24 + exp(-dg * 16.0) * 0.03;
   idleGlow *= 1.0 - smoothstep(0.10, 0.32, dg);
-  float hoverGlow = nearBand * 0.50 + exp(-dg * 18.0) * 0.30 +
-    exp(-dg * 6.0) * 0.10 * (1.0 - smoothstep(0.25, 0.80, dg));
+  // Hover glow hugs the lit part of the outline (a bit brighter and fuller than idle), no cone.
+  // Magnet: while hovering, the glow is drawn out of the outline toward the cursor. Pixels lying
+  // between the edge and the cursor get a longer reach; it stops at the cursor.
+  vec2 outVec = p - bp;
+  float outLen = length(outVec);
+  vec2 curVec = cLocal - bp;
+  float curLen = length(curVec);
+  float align = (outLen > 0.00001 && curLen > 0.00001) ? dot(outVec / outLen, curVec / curLen) : 0.0;
+  float aim = smoothstep(0.45, 1.0, align);
+  aim *= aim;                                             // focused tongue, not a wide fan
+  float reachLimit = min(curLen, 0.55);                   // never a long beam across the screen
+  float pull = aim * (1.0 - smoothstep(0.2 * reachLimit, 1.1 * reachLimit, outLen));
+  float dgMag = dg / (1.0 + 1.5 * pull);
+  float hoverGlow = nearBand * 0.50 + exp(-dgMag * 34.0) * 0.28 +
+    exp(-dgMag * 12.0) * 0.06 * (1.0 - smoothstep(0.10, 0.35, dgMag));
 
   // Soft glow is zero in gaps/holes (inside the envelope but outside the artwork) and fades where
   // the nearest real edge is much farther away than the envelope (sealed notches), so no plasma
@@ -336,12 +365,20 @@ void main() {
   float inGap = smoothstep(-0.003, -0.008, dEnvLocal);
   float glowMask = sealed * (1.0 - inGap);
   float hover = u_hoverTransition;
-  // Detail lines inside the silhouette stay quiet: the light belongs to the outer outline, so it reads
-  // as part of the object instead of shining out of its center.
-  float coreW = core * mix(1.0, 0.30, smoothstep(0.0, -0.012, dEnvLocal));
+  // Lines inside the silhouette (eyes, letters, panes) are drawn on their own: steady and clear, not
+  // lit by the travelling light, so the artwork is always readable.
+  // "Inside" starts a little deeper than the outline's own line width, so the outer outline is never
+  // mistaken for a detail line.
+  float lineLocal = u_edgeWidth / safeScale;
+  float interior = smoothstep(-1.6 * lineLocal, -3.2 * lineLocal, dEnvLocal);
+  float coreW = core * (1.0 - interior);
+  float detailLine = core * interior * 0.50;
   float idlePart = (idleGlow * glowMask + coreW * 0.55) * edgeLight;
   float hoverPart = (hoverGlow * glowMask + coreW * 0.70) * hoverLight;
   float rimProfile = mix(idlePart, hoverPart, hover) * u_edgeIntensity;
+
+  // Detail lines: mostly white with a hint of the palette.
+  vec3 detailColor = mix(edgeColor, vec3(1.0), 0.70);
 
   // Inside vs outside composition
   vec3 linearColor;
@@ -360,10 +397,10 @@ void main() {
     // Subpixel occluder edge derivative for crisp anti-aliased silhouette
     float occluderEdge = max(length(vec2(dFdx(d), dFdy(d))), 0.001);
     float occluder = clamp(0.5 - d / occluderEdge, 0.0, 1.0);
-    linearColor = mix(edgeColor * rimProfile, col, occluder);
+    linearColor = mix(edgeColor * rimProfile + detailColor * detailLine, col, occluder);
     outAlpha = 1.0;
   } else {
-    linearColor = u_bgColor + (edgeColor * rimProfile);
+    linearColor = u_bgColor + (edgeColor * rimProfile) + detailColor * detailLine;
   }
 
   // Screen-edge vertical fade

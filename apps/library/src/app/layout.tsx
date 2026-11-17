@@ -37,7 +37,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                 <Logo className="h-4 w-4" />
                 <span>Halorim, MIT license, {new Date().getFullYear()}</span>
               </div>
-              <div className="flex flex-wrap items-center gap-x-6 gap-y-2 font-mono text-[11px] uppercase tracking-[0.14em]">
+              <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-[13px]">
                 <Link href="/#library" className="transition-colors duration-fast ease-out hover:text-fg">
                   Library
                 </Link>

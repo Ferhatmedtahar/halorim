@@ -227,6 +227,7 @@ impl Default for X11DesktopWindowConfig {
 /// Remembers the user's current GNOME wallpaper so it can be restored on exit.
 /// (The wallpaper window is opaque, so we no longer need to force a black background.)
 pub fn sync_gnome_background() {
+    crate::background::recover_leftover_snapshot();
     crate::background::save_original();
 }
 

@@ -141,6 +141,14 @@ pub fn create_tray(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
 
     // 5. General Controls
     let toggle_pause = MenuItem::with_id(app, "toggle_pause", "Pause / Resume", true, None::<&str>)?;
+    let autostart_item = tauri::menu::CheckMenuItem::with_id(
+        app,
+        "toggle_autostart",
+        "Start at Login",
+        true,
+        crate::autostart::is_enabled(),
+        None::<&str>,
+    )?;
     let quit_item = MenuItem::with_id(app, "quit", "Quit Glowframe", true, None::<&str>)?;
 
     let root_menu = Menu::with_items(
@@ -155,6 +163,7 @@ pub fn create_tray(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
             &scale_menu,
             &load_svg,
             &toggle_pause,
+            &autostart_item,
             &quit_item,
         ],
     )?;
@@ -250,6 +259,11 @@ pub fn create_tray(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
                             }
                         }
                     });
+                }
+                "toggle_autostart" => {
+                    let enable = !crate::autostart::is_enabled();
+                    crate::autostart::set_enabled(enable);
+                    let _ = autostart_item.set_checked(crate::autostart::is_enabled());
                 }
                 "quit" => {
                     app_handle.exit(0);

@@ -52,7 +52,21 @@ the lower-FPS / lower-resolution settings are still to be measured. Reproduce on
 
 Tray menu options to reduce cost: 15 / 30 / 60 FPS and 0.5x / 0.75x / 1.0x resolution scale.
 
-## Getting started
+## Install
+
+Download the file for your system from the [latest release](https://github.com/Ferhatmedtahar/halorim/releases/latest).
+
+| System                    | File         | Command                                                    |
+| :------------------------ | :----------- | :--------------------------------------------------------- |
+| Ubuntu, Debian, Mint      | `.deb`       | `sudo apt install ./<file>.deb`                            |
+| Fedora, openSUSE          | `.rpm`       | `sudo dnf install ./<file>.rpm`                            |
+| Arch and any other distro | `.AppImage`  | `chmod +x <file>.AppImage && ./<file>.AppImage`            |
+| Windows 10 / 11           | `-setup.exe` | Double-click. SmartScreen may warn: the build is unsigned. |
+
+Linux needs WebKitGTK 4.1 (Ubuntu 22.04+, Debian 12+, Fedora 36+, current Arch). The wallpaper
+works on X11, wlroots compositors, KDE and GNOME; see [docs/LINUX.md](docs/LINUX.md).
+
+## Build from source
 
 Requirements: Node 22, pnpm 10, and for the desktop app a Rust toolchain plus Tauri's Linux
 dependencies (`webkit2gtk-4.1`, GTK 3).

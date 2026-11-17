@@ -61,7 +61,7 @@ export const phantomScene: Scene = parseScene({
   interaction: {
     followCursor: true,
     sharpness: 3.5,
-    smoothing: 0.04,
+    smoothing: 0.06,
     idleOrbit: false,
     idleTimeoutMs: 2000,
   },

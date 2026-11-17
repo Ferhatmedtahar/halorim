@@ -3,7 +3,7 @@ import animate from 'tailwindcss-animate';
 
 /**
  * Halorim site design tokens.
- * Black and white only. Sharp corners everywhere (radius 0), muted hairlines instead of shadows,
+ * Black and white, with one amber primary for main actions. Sharp corners everywhere (radius 0), muted hairlines instead of shadows,
  * surfaces butted against each other with no gaps. The only colour on the site is the wallpaper
  * content itself (thumbnails and live previews).
  */
@@ -32,17 +32,19 @@ const config: Config = {
         line: '#242424',
         'line-strong': '#3a3a3a',
         fg: '#ededed',
+        // Primary: the amber of a halo. Used only for main actions and active states.
+        halo: { DEFAULT: '#f5b13d', hover: '#ffc45e', dim: 'rgba(245,177,61,0.14)' },
         muted: { DEFAULT: '#8a8a8a', foreground: '#8a8a8a' },
         // shadcn/ui semantic tokens, mapped to the same palette.
         background: '#0a0a0a',
         foreground: '#ededed',
         border: '#242424',
         input: '#242424',
-        ring: '#ededed',
+        ring: '#f5b13d',
         popover: { DEFAULT: '#0e0e0e', foreground: '#ededed' },
         accent: { DEFAULT: '#1a1a1a', foreground: '#ededed' },
         secondary: { DEFAULT: '#131313', foreground: '#ededed' },
-        primary: { DEFAULT: '#ededed', foreground: '#0a0a0a' },
+        primary: { DEFAULT: '#f5b13d', foreground: '#0a0a0a' },
       },
       borderColor: { DEFAULT: '#242424' },
       boxShadow: {
@@ -82,12 +84,18 @@ const config: Config = {
         site: '1180px',
       },
       keyframes: {
+        // FAQ answer: a short drop-and-fade when it opens.
+        accordion: {
+          '0%': { opacity: '0', transform: 'translateY(-6px)' },
+          '100%': { opacity: '1', transform: 'translateY(0)' },
+        },
         rise: {
           '0%': { opacity: '0', transform: 'translateY(8px)' },
           '100%': { opacity: '1', transform: 'translateY(0)' },
         },
       },
       animation: {
+        accordion: 'accordion 220ms cubic-bezier(0.4, 0, 0.2, 1) both',
         rise: 'rise 550ms cubic-bezier(0.4, 0, 0.2, 1) both',
       },
     },

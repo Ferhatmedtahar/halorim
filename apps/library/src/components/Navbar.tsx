@@ -47,11 +47,11 @@ export default function Navbar({ repo }: { repo: string }) {
                     )}
                   >
                     {item.label}
-                    {/* Active page: a white rule on the header's bottom edge. */}
+                    {/* Active page: an amber rule on the header's bottom edge. */}
                     <span
                       aria-hidden="true"
                       className={cn(
-                        'absolute inset-x-4 -bottom-px h-0.5 bg-fg transition-opacity duration-fast ease-out',
+                        'absolute inset-x-4 -bottom-px h-0.5 bg-halo transition-opacity duration-fast ease-out',
                         active ? 'opacity-100' : 'opacity-0',
                       )}
                     />
@@ -74,7 +74,7 @@ export default function Navbar({ repo }: { repo: string }) {
           <div className="hidden items-center border-l border-line px-4 sm:flex">
             <Link
               href="/#download"
-              className="inline-flex h-8 items-center bg-fg px-4 text-sm font-medium text-bg transition-colors duration-fast ease-out hover:bg-white"
+              className="inline-flex h-8 items-center bg-halo px-4 text-sm font-medium text-bg transition-colors duration-fast ease-out hover:bg-halo-hover"
             >
               Get the app
             </Link>

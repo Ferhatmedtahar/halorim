@@ -22,6 +22,8 @@ const CATEGORIES = [
   { id: 'shapes', label: 'Shapes' },
 ] as const;
 
+const PREVIEW_COUNT = 9;
+
 type CategoryId = (typeof CATEGORIES)[number]['id'];
 
 function categoryOf(scene: Scene): CategoryId {
@@ -35,6 +37,7 @@ function categoryOf(scene: Scene): CategoryId {
 export default function GalleryView({ presets }: GalleryViewProps) {
   const [query, setQuery] = useState('');
   const [active, setActive] = useState<CategoryId | 'all'>('all');
+  const [showAll, setShowAll] = useState(false);
 
   const counts = useMemo(() => {
     const c: Record<CategoryId, number> = { apple: 0, windows: 0, linux: 0, shapes: 0 };
@@ -54,6 +57,9 @@ export default function GalleryView({ presets }: GalleryViewProps) {
       return matchesCategory && matchesQuery;
     });
   }, [presets, query, active]);
+
+  // Only trim the default view; a search or filter always shows every match.
+  const collapsed = !showAll && !query.trim() && active === 'all' && filteredPresets.length > PREVIEW_COUNT;
 
   return (
     <section id="library">
@@ -88,7 +94,7 @@ export default function GalleryView({ presets }: GalleryViewProps) {
               <ToggleGroupItem
                 key={c.id}
                 value={c.id}
-                className="h-[57px] gap-2 border-r border-line px-3 font-mono text-[11px] uppercase tracking-[0.12em] text-muted last:border-r-0 hover:bg-raised hover:text-fg data-[state=on]:bg-fg data-[state=on]:text-bg"
+                className="h-[57px] gap-2 border-r border-line px-3 text-[13px] text-muted last:border-r-0 hover:bg-raised hover:text-fg data-[state=on]:bg-halo data-[state=on]:text-bg"
               >
                 {c.label}
                 <span className="tabular-nums opacity-60">{counts[c.id]}</span>
@@ -117,8 +123,12 @@ export default function GalleryView({ presets }: GalleryViewProps) {
         // Cards share their hairlines: no gaps. Cells that finish a short last row show the dotted field behind.
         <div className="overflow-hidden border-b border-line">
           <ul className="bg-dots -mr-px grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
-            {filteredPresets.map((preset) => (
-              <li key={preset.meta.id} className="border-b border-r border-line bg-bg">
+            {filteredPresets.map((preset, i) => (
+              // Cards past the first nine stay in the page (so they are indexed) but are hidden until "Show all".
+              <li
+                key={preset.meta.id}
+                className={`border-b border-r border-line bg-bg ${collapsed && i >= PREVIEW_COUNT ? 'hidden' : ''}`}
+              >
                 <Link
                   href={`/w/${preset.meta.id}`}
                   className="group flex h-full flex-col p-4 transition-colors duration-fast ease-out hover:bg-surface"
@@ -131,7 +141,7 @@ export default function GalleryView({ presets }: GalleryViewProps) {
 
                   <div className="mt-4 flex items-baseline justify-between gap-3">
                     <h3 className="truncate font-medium text-fg">{preset.meta.name}</h3>
-                    <span className="shrink-0 font-mono text-[11px] uppercase tracking-[0.1em] text-muted">
+                    <span className="shrink-0 text-[13px] text-muted">
                       {preset.shape.type}
                     </span>
                   </div>
@@ -141,7 +151,7 @@ export default function GalleryView({ presets }: GalleryViewProps) {
                     {preset.meta.tags.slice(0, 3).map((tag) => (
                       <span
                         key={tag}
-                        className="border border-line px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-[0.1em] text-muted"
+                        className="border border-line px-1.5 py-0.5 text-[13px] text-muted"
                       >
                         {tag}
                       </span>
@@ -149,7 +159,7 @@ export default function GalleryView({ presets }: GalleryViewProps) {
                   </div>
 
                   {/* Visible call to action; the whole card is the link, this just says so. */}
-                  <span className="mt-4 flex h-10 items-center justify-between border border-line-strong px-4 text-sm font-medium transition-colors duration-fast ease-out group-hover:border-fg group-hover:bg-fg group-hover:text-bg">
+                  <span className="mt-4 flex h-10 items-center justify-between border border-line-strong px-4 text-sm font-medium transition-colors duration-fast ease-out group-hover:border-halo group-hover:bg-halo group-hover:text-bg">
                     View wallpaper
                     <ArrowUpRight className="h-4 w-4" />
                   </span>
@@ -157,6 +167,15 @@ export default function GalleryView({ presets }: GalleryViewProps) {
               </li>
             ))}
           </ul>
+          {collapsed ? (
+            <button
+              type="button"
+              onClick={() => setShowAll(true)}
+              className="flex h-14 w-full items-center justify-center border-t border-line text-sm font-medium transition-colors duration-fast ease-out hover:bg-raised hover:text-halo"
+            >
+              Show all {filteredPresets.length} wallpapers
+            </button>
+          ) : null}
         </div>
       )}
     </section>

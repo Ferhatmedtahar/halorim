@@ -20,6 +20,13 @@ const METADATA_JSON: &str =
 /// Button 1 in the modifier mask reported by the Shell (same bit as X11's Button1Mask).
 pub const BUTTON1_MASK: u32 = 1 << 8;
 
+static LIVE: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// True once the running Shell's bridge shows the live wallpaper (desktop, overview, workspaces).
+pub fn is_live() -> bool {
+    LIVE.load(std::sync::atomic::Ordering::Relaxed)
+}
+
 pub fn is_gnome_session(current_desktop: Option<&str>) -> bool {
     current_desktop
         .map(|d| d.to_uppercase().contains("GNOME"))
@@ -268,6 +275,9 @@ mod linux {
         let status = match running_version {
             Some(v) if v >= BRIDGE_VERSION && installed != InstallOutcome::Updated => {
                 subscribe_pointer(&conn, app);
+                super::LIVE.store(true, std::sync::atomic::Ordering::Relaxed);
+                // A still snapshot left as the GNOME background by an earlier run is not needed.
+                crate::background::restore_original();
                 BridgeStatus::Live
             }
             Some(_) => {

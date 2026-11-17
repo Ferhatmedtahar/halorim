@@ -19,11 +19,14 @@ export default function SectionBar({
     <div
       id={id}
       className={cn(
-        'flex h-11 items-center justify-between border-b border-line px-5 font-mono text-[11px] uppercase tracking-[0.14em] text-muted sm:px-6',
+        'flex h-11 items-center justify-between border-b border-line px-5 text-[13px] text-muted sm:px-6',
         className,
       )}
     >
-      <span>{label}</span>
+      <span className="flex items-center gap-2">
+        <span aria-hidden="true" className="h-2 w-2 bg-halo" />
+        {label}
+      </span>
       {children ? <span className="tabular-nums">{children}</span> : null}
     </div>
   );

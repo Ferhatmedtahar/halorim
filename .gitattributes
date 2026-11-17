@@ -1,0 +1,2 @@
+# Built bundle copied from packages/core — exclude from GitHub language stats
+apps/library/public/glowframe-core.js linguist-generated=true

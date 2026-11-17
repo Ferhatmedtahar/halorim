@@ -52,7 +52,7 @@ export default async function WallpaperDetailPage({ params }: PageProps) {
     <div>
       <Link
         href="/"
-        className="flex h-11 items-center gap-2 border-b border-line px-5 font-mono text-[11px] uppercase tracking-[0.14em] text-muted transition-colors duration-fast ease-out hover:bg-raised hover:text-fg sm:px-6"
+        className="flex h-11 items-center gap-2 border-b border-line px-5 text-[13px] text-muted transition-colors duration-fast ease-out hover:bg-raised hover:text-fg sm:px-6"
       >
         <ArrowLeft className="h-3.5 w-3.5" />
         Back to library
@@ -93,7 +93,7 @@ export default async function WallpaperDetailPage({ params }: PageProps) {
                   className="flex items-center gap-3 border-b border-r border-line px-5 py-4 sm:px-6"
                 >
                   <span className="h-5 w-5 border border-line-strong" style={{ backgroundColor: color }} />
-                  <span className="font-mono text-[11px] uppercase tracking-[0.12em] text-muted">Stop {idx + 1}</span>
+                  <span className="text-[13px] text-muted">Stop {idx + 1}</span>
                 </li>
               ))}
             </ul>
@@ -129,7 +129,7 @@ export default async function WallpaperDetailPage({ params }: PageProps) {
             </ul>
             <Link
               href="/about"
-              className="block px-5 py-4 font-mono text-[11px] uppercase tracking-[0.14em] text-muted transition-colors duration-fast ease-out hover:bg-raised hover:text-fg sm:px-6"
+              className="block px-5 py-4 text-[13px] text-muted transition-colors duration-fast ease-out hover:bg-raised hover:text-fg sm:px-6"
             >
               Full installation guide
             </Link>

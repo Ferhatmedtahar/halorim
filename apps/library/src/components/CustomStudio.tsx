@@ -315,7 +315,7 @@ export default function CustomStudio({ initialScene }: CustomStudioProps) {
       </header>
 
       <p
-        className="flex h-11 items-center border-b border-line px-5 font-mono text-[11px] uppercase tracking-[0.14em] text-muted sm:px-6"
+        className="flex h-11 items-center border-b border-line px-5 text-[13px] text-muted sm:px-6"
         role="status"
         aria-live="polite"
       >
@@ -331,7 +331,7 @@ export default function CustomStudio({ initialScene }: CustomStudioProps) {
             className="relative aspect-video w-full overflow-hidden border border-line-strong bg-black"
           >
             <canvas ref={canvasRef} className="block h-full w-full cursor-crosshair" />
-            <p className="pointer-events-none absolute bottom-3 left-4 bg-black/60 px-1.5 font-mono text-[11px] uppercase tracking-[0.12em] text-muted">
+            <p className="pointer-events-none absolute bottom-3 left-4 bg-black/60 px-1.5 text-[13px] text-muted">
               Move the cursor to steer the light. Click to change colors.
             </p>
           </div>

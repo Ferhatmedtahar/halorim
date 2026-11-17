@@ -67,6 +67,17 @@ pub fn decode_settings(text: &str) -> Vec<(String, String)> {
         .collect()
 }
 
+/// After a crash or a shutdown that killed Glowframe, our still snapshot can still be the GNOME
+/// background. Put the user's own wallpaper back before anything else.
+pub fn recover_leftover_snapshot() {
+    if !is_gnome() {
+        return;
+    }
+    if gsettings_get("picture-uri").map(|v| is_glowframe_uri(&v)).unwrap_or(false) {
+        restore_original();
+    }
+}
+
 /// Remembers the user's wallpaper once. Never overwrites an existing backup and never records one
 /// of our own generated images (e.g. after a crash) as the "original".
 pub fn save_original() {

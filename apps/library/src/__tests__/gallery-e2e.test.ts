@@ -102,7 +102,7 @@ describe('Gallery E2E & Performance Acceptance Tests', () => {
     expect(webglCount).toBe(0);
 
     // Verify all 6 preset cards are rendered with pre-rendered thumbnails
-    const cardImages = await page.$$('img');
+    const cardImages = await page.$$('img:visible');
     expect(cardImages.length).toBeGreaterThanOrEqual(6);
 
     for (const img of cardImages) {

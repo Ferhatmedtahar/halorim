@@ -8,8 +8,8 @@ const buttonVariants = cva(
   {
     variants: {
       variant: {
-        // Off-white fill, dark text. The one loud thing in the chrome.
-        default: 'bg-fg text-bg hover:bg-white',
+        // Amber fill, dark text. The one loud thing in the chrome.
+        default: 'bg-halo text-bg hover:bg-halo-hover',
         // Hairline outline, no fill.
         secondary: 'border border-line-strong bg-transparent text-fg hover:bg-hover',
         ghost: 'text-muted hover:text-fg hover:bg-raised',
