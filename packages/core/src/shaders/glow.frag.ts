@@ -380,6 +380,19 @@ void main() {
   // Detail lines: mostly white with a hint of the palette.
   vec3 detailColor = mix(edgeColor, vec3(1.0), 0.70);
 
+  // Background composition. Dark backgrounds: light is ADDED (glow). Light backgrounds: adding light
+  // to white changes nothing, so the glow is instead a soft colored halo that tints the background.
+  float bgLum = dot(u_bgColor, vec3(0.2126, 0.7152, 0.0722));
+  float lightBg = smoothstep(0.12, 0.45, bgLum);
+  vec3 darkOutside = u_bgColor + edgeColor * rimProfile + detailColor * detailLine;
+  // Saturated, slightly deeper version of the palette color so it reads against a pale background.
+  float edgeLum = dot(edgeColor, vec3(0.2126, 0.7152, 0.0722));
+  vec3 haloTint = mix(vec3(edgeLum), edgeColor, 1.35) * 0.72;
+  haloTint = clamp(haloTint, 0.0, 1.0);
+  float haloAmount = min(1.0 - exp(-(rimProfile * 3.2 + detailLine * 2.0)), 0.88);
+  vec3 lightOutside = mix(u_bgColor, haloTint, haloAmount);
+  vec3 outsideColor = mix(darkOutside, lightOutside, lightBg);
+
   // Inside vs outside composition
   vec3 linearColor;
   float outAlpha = 1.0;
@@ -397,16 +410,16 @@ void main() {
     // Subpixel occluder edge derivative for crisp anti-aliased silhouette
     float occluderEdge = max(length(vec2(dFdx(d), dFdy(d))), 0.001);
     float occluder = clamp(0.5 - d / occluderEdge, 0.0, 1.0);
-    linearColor = mix(edgeColor * rimProfile + detailColor * detailLine, col, occluder);
+    linearColor = mix(outsideColor, col, occluder);
     outAlpha = 1.0;
   } else {
-    linearColor = u_bgColor + (edgeColor * rimProfile) + detailColor * detailLine;
+    linearColor = outsideColor;
   }
 
   // Screen-edge vertical fade
   float vertDist = min(v_uv.y, 1.0 - v_uv.y);
   float screenEdgeFade = sqrt(clamp(vertDist / 0.15, 0.0, 1.0));
-  linearColor *= screenEdgeFade;
+  linearColor = mix(u_bgColor, linearColor, screenEdgeFade);
 
   linearColor = clamp(linearColor, 0.0, 1.0);
 

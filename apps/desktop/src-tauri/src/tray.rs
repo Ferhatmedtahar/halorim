@@ -38,6 +38,46 @@ struct GlowPayload {
 }
 
 #[derive(Clone, Serialize)]
+struct ColorsPayload {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    background: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    fill: Option<String>,
+}
+
+/// (menu id suffix, label, CSS color). "default" = the preset's own color. "-" = separator.
+/// Dark tones let the glow shine; light tones turn it into a soft colored halo.
+const BACKGROUND_COLORS: &[(&str, &str, &str)] = &[
+    ("black", "Black (Default)", "default"),
+    ("midnight", "Midnight Navy", "#0b1222"),
+    ("slate", "Slate", "#1b2430"),
+    ("ocean", "Deep Ocean", "#06262d"),
+    ("forest", "Forest Night", "#0e1f17"),
+    ("wine", "Wine", "#2a0b14"),
+    ("aubergine", "Aubergine", "#1e0f2a"),
+    ("espresso", "Espresso", "#1e1511"),
+    ("graphite", "Graphite", "#1c1d21"),
+    ("-", "", ""),
+    ("ivory", "Ivory", "#f4efe6"),
+    ("sand", "Sand", "#e8dcc7"),
+    ("sage", "Sage", "#dde5d8"),
+    ("mist", "Mist Blue", "#e1e8f0"),
+    ("blush", "Blush", "#f2e2df"),
+    ("light-gray", "Light Gray", "#e6e8ec"),
+    ("white", "White", "#ffffff"),
+];
+const OBJECT_COLORS: &[(&str, &str, &str)] = &[
+    ("black", "Black (Default)", "default"),
+    ("graphite", "Graphite", "#2a2c31"),
+    ("navy", "Navy", "#101a33"),
+    ("wine", "Deep Wine", "#3a0f1a"),
+    ("forest", "Forest", "#0f2a1e"),
+    ("-", "", ""),
+    ("ivory", "Ivory", "#f4efe6"),
+    ("white", "White", "#ffffff"),
+];
+
+#[derive(Clone, Serialize)]
 struct SpeedPayload {
     speed: f64,
 }
@@ -88,6 +128,19 @@ pub fn create_tray(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
         Ok(Submenu::with_items(app, title, true, &refs)?)
     };
     let shapes_menu = build_submenu("Shapes", SHAPE_PRESETS)?;
+    let build_color_menu = |title: &str, prefix: &str, list: &[(&str, &str, &str)]| -> Result<Submenu<tauri::Wry>, Box<dyn std::error::Error>> {
+        let submenu = Submenu::new(app, title, true)?;
+        for (id, label, _) in list {
+            if *id == "-" {
+                submenu.append(&tauri::menu::PredefinedMenuItem::separator(app)?)?;
+            } else {
+                submenu.append(&MenuItem::with_id(app, format!("{}:{}", prefix, id), *label, true, None::<&str>)?)?;
+            }
+        }
+        Ok(submenu)
+    };
+    let background_menu = build_color_menu("Background", "bg", BACKGROUND_COLORS)?;
+    let object_menu = build_color_menu("Object Color", "fill", OBJECT_COLORS)?;
     let os_menu = build_submenu("Operating Systems", OS_PRESETS)?;
     let distro_menu = build_submenu("Linux Distros", DISTRO_PRESETS)?;
 
@@ -157,6 +210,8 @@ pub fn create_tray(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
             &os_menu,
             &distro_menu,
             &shapes_menu,
+            &background_menu,
+            &object_menu,
             &glow_menu,
             &speed_menu,
             &fps_menu,
@@ -182,6 +237,19 @@ pub fn create_tray(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
         .on_menu_event(move |app_handle, event| {
             let id = event.id.as_ref();
             match id {
+                color if color.starts_with("bg:") || color.starts_with("fill:") => {
+                    let (prefix, key) = color.split_once(':').unwrap_or(("", ""));
+                    let list = if prefix == "bg" { BACKGROUND_COLORS } else { OBJECT_COLORS };
+                    if let Some((_, _, css)) = list.iter().find(|(id, _, _)| *id == key) {
+                        let value = Some(css.to_string());
+                        let payload = if prefix == "bg" {
+                            ColorsPayload { background: value, fill: None }
+                        } else {
+                            ColorsPayload { background: None, fill: value }
+                        };
+                        let _ = app_handle.emit("glowframe://set-colors", payload);
+                    }
+                }
                 preset if preset.starts_with("preset:") => {
                     let _ = app_handle.emit(
                         "glowframe://set-scene",

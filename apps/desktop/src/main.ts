@@ -90,6 +90,10 @@ interface SharedSettings {
   presetId?: string;
   glow?: number;
   speed?: number;
+  /** Background color (any CSS color). Unset = the preset's own (black). */
+  background?: string;
+  /** Object (silhouette) color. Unset = the preset's own (black). */
+  fill?: string;
 }
 const SETTINGS_KEY = 'glowframe_settings';
 function loadSettings(): SharedSettings {
@@ -109,6 +113,8 @@ function withOverrides(scene: Scene): Scene {
   return {
     ...scene,
     edge: { ...scene.edge, intensity: settings.glow ?? scene.edge.intensity },
+    background: { ...scene.background, color: settings.background ?? scene.background.color },
+    fill: { ...scene.fill, color: settings.fill ?? scene.fill.color },
     mode: {
       ...scene.mode,
       params: { ...scene.mode.params, speed: settings.speed ?? scene.mode.params['speed'] },
@@ -125,13 +131,18 @@ function syncFromStorage() {
   if (
     stored.presetId === settings.presetId &&
     stored.glow === settings.glow &&
-    stored.speed === settings.speed
+    stored.speed === settings.speed &&
+    stored.background === settings.background &&
+    stored.fill === settings.fill
   ) {
     return;
   }
   settings.presetId = stored.presetId;
   settings.glow = stored.glow;
   settings.speed = stored.speed;
+  settings.background = stored.background;
+  settings.fill = stored.fill;
+  syncPageBackground();
   const target = stored.presetId ? PRESET_SCENES[stored.presetId] : undefined;
   void applyScene(target ?? baseScene);
 }
@@ -316,6 +327,26 @@ listen<{ scale: number }>('glowframe://set-resolution-scale', (event) => {
 listen<{ intensity: number }>('glowframe://set-glow-intensity', (event) => {
   settings.glow = event.payload.intensity;
   saveSettings();
+  applyScene(baseScene);
+}).catch(() => {});
+
+// The page behind the canvas uses the same color, so nothing flashes black while (re)loading.
+function syncPageBackground() {
+  const color = settings.background ?? '#000000';
+  document.documentElement.style.setProperty('background', color, 'important');
+  document.body.style.setProperty('background', color, 'important');
+  canvas.style.setProperty('background', color, 'important');
+}
+syncPageBackground();
+
+// Background / object colors (shared by all screens). A missing field keeps the current value;
+// "default" goes back to the preset's own color.
+listen<{ background?: string; fill?: string }>('glowframe://set-colors', (event) => {
+  const { background, fill } = event.payload;
+  if (background !== undefined) settings.background = background === 'default' ? undefined : background;
+  if (fill !== undefined) settings.fill = fill === 'default' ? undefined : fill;
+  saveSettings();
+  syncPageBackground();
   applyScene(baseScene);
 }).catch(() => {});
 
