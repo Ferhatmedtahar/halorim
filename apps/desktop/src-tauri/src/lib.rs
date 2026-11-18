@@ -1,3 +1,4 @@
+#[cfg(target_os = "linux")]
 pub mod autostart;
 pub mod background;
 pub mod gnome_bridge;
@@ -69,6 +70,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![save_snapshot, log_line])
         .setup(move |app| {
             let handle = app.handle();
+            #[cfg(target_os = "linux")]
             autostart::ensure_default();
             let _ = tray::create_tray(handle);
 
@@ -110,6 +112,8 @@ pub fn run() {
                     .title(format!("Glowframe Wallpaper {}", i))
                     .decorations(false)
                     .transparent(false)
+                    // Black from the first frame: never a white flash while the page is still loading.
+                    .background_color(tauri::window::Color(0, 0, 0, 255))
                     .always_on_bottom(true)
                     .skip_taskbar(true)
                     .resizable(false)

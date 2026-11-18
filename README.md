@@ -66,6 +66,16 @@ Download the file for your system from the [latest release](https://github.com/F
 Linux needs WebKitGTK 4.1 (Ubuntu 22.04+, Debian 12+, Fedora 36+, current Arch). The wallpaper
 works on X11, wlroots compositors, KDE and GNOME; see [docs/LINUX.md](docs/LINUX.md).
 
+On GNOME, log out and back in once after the first launch. Fedora's GNOME has no tray icons by default:
+install the "AppIndicator and KStatusNotifierItem Support" extension to see Halorim's menu.
+
+### Turn off or uninstall
+
+- **Turn off:** tray icon → **Quit Halorim** (your previous wallpaper comes back). Untick **Start at Login** to stop it starting with your session.
+- **Linux:** `sudo apt remove halorim` or `sudo dnf remove halorim` (also removes the login entry). AppImage: delete the file.
+- **Windows:** Settings → Apps → Installed apps → Halorim → Uninstall.
+- **Remove settings too (Linux):** `rm -rf ~/.config/glowframe ~/.local/share/gnome-shell/extensions/glowframe-pointer@glowframe.dev`
+
 ## Build from source
 
 Requirements: Node 22, pnpm 10, and for the desktop app a Rust toolchain plus Tauri's Linux

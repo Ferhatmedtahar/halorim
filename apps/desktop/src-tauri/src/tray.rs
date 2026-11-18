@@ -194,14 +194,20 @@ pub fn create_tray(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
 
     // 5. General Controls
     let toggle_pause = MenuItem::with_id(app, "toggle_pause", "Pause / Resume", true, None::<&str>)?;
-    let autostart_item = tauri::menu::CheckMenuItem::with_id(
-        app,
-        "toggle_autostart",
-        "Start at Login",
-        true,
-        crate::autostart::is_enabled(),
-        None::<&str>,
-    )?;
+    // Start at Login (Linux only). Development builds can not register themselves, so the item is
+    // greyed out there instead of silently doing nothing.
+    #[cfg(target_os = "linux")]
+    let autostart_item = {
+        let dev = crate::autostart::install_kind() == crate::autostart::InstallKind::DevBuild;
+        tauri::menu::CheckMenuItem::with_id(
+            app,
+            "toggle_autostart",
+            if dev { "Start at Login (installed app only)" } else { "Start at Login" },
+            !dev,
+            crate::autostart::is_enabled(),
+            None::<&str>,
+        )?
+    };
     let quit_item = MenuItem::with_id(app, "quit", "Quit Halorim", true, None::<&str>)?;
 
     let root_menu = Menu::with_items(
@@ -218,10 +224,11 @@ pub fn create_tray(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
             &scale_menu,
             &load_svg,
             &toggle_pause,
-            &autostart_item,
             &quit_item,
         ],
     )?;
+    #[cfg(target_os = "linux")]
+    root_menu.insert(&autostart_item, 11)?;
 
     let is_paused = Arc::new(AtomicBool::new(false));
 
@@ -328,6 +335,7 @@ pub fn create_tray(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
                         }
                     });
                 }
+                #[cfg(target_os = "linux")]
                 "toggle_autostart" => {
                     let enable = !crate::autostart::is_enabled();
                     crate::autostart::set_enabled(enable);
