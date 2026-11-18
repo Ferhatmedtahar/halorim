@@ -28,7 +28,7 @@ web gallery where you can preview wallpapers and download them as an image or a 
 | Platform                     | Status                                                        |
 | :--------------------------- | :------------------------------------------------------------ |
 | Linux, X11                   | Supported                                                     |
-| Linux, Wayland (wlroots/KDE) | Supported via layer-shell                                     |
+| Linux, Wayland (wlroots/KDE) | Experimental, through XWayland (no layer-shell yet)           |
 | Linux, GNOME on Wayland      | Supported through a bundled GNOME Shell extension (see below) |
 | Windows 10 / 11              | Supported, less tested                                        |
 | macOS                        | Not yet                                                       |
@@ -36,6 +36,10 @@ web gallery where you can preview wallpapers and download them as an image or a 
 GNOME Wayland does not allow normal apps to draw behind the desktop. Halorim installs a small Shell
 extension that clones its window into the real background. After a Shell update on Wayland you may
 need to log out and back in. Details in [docs/LINUX.md](docs/LINUX.md).
+
+On other Wayland desktops (KDE Plasma, Sway, Hyprland) Halorim also runs through XWayland, as a
+desktop-type window kept below the others. It does not use the layer-shell protocol yet, so how
+cleanly it sits behind windows depends on your compositor.
 
 ## Performance
 
@@ -123,7 +127,10 @@ pnpm format:check
 ```
 
 The renderer is also covered by golden-image tests (`packages/core/test-page`), which render
-deterministic frames and compare them against committed PNGs.
+deterministic frames and compare them against committed PNGs. On a mismatch the test writes
+`*.actual.png` and `*.diff.png` next to the reference. If the change is intended, accept it with
+`UPDATE_GOLDEN=1 pnpm test`. The test page loads `packages/core/dist`, so build before running the
+core tests on their own (the root `pnpm test` runs through Turbo and builds first).
 
 ## Contributing
 

@@ -8,12 +8,13 @@ All notable changes to the Glowframe monorepo are documented in this file.
 
 - **M9: Linux Desktop Runner (`apps/desktop/src-tauri/src/linux_host.rs`)**:
   - **Display Server Environment Detection**:
-    - Automatic detection across X11, Wayland with `wlr-layer-shell` support (Hyprland, Sway, River, Wayfire, KDE Plasma), and GNOME on Wayland sessions.
+    - Automatic detection across X11, non-GNOME Wayland (Hyprland, Sway, River, Wayfire, KDE Plasma), and GNOME on Wayland sessions. Because the runner forces `GDK_BACKEND=x11`, all Wayland sessions take the XWayland path.
   - **X11 Desktop Window Hint Integration**:
     - Applies EWMH/NetWM desktop hints: `_NET_WM_WINDOW_TYPE_DESKTOP` and `_NET_WM_STATE_BELOW`.
     - Strips window decorations, sets skip taskbar/pager hints, maximizes across the monitor geometry, and lowers behind all desktop clients.
   - **Wayland Layer-Shell Architecture**:
     - Defines `WaylandLayerShellConfig` targeting `ZWLR_LAYER_SHELL_V1_LAYER_BACKGROUND` (Layer 0), with all 4 edge anchors (`15`), exclusive zone `-1` (no panel displacement), and zero keyboard interactivity.
+    - _Correction:_ this config is not wired to any layer-shell implementation yet (no layer-shell crate is linked). KDE and wlroots compositors run through XWayland. Earlier docs said otherwise.
   - **GNOME on Wayland Fallback & Documentation**:
     - Transparently documents Mutter's lack of `wlr-layer-shell` support.
     - Implements graceful fallback to XWayland desktop mode with informative runtime logging.

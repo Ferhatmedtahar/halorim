@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { chromium, type Browser, type Page } from '@playwright/test';
 import * as path from 'node:path';
-import * as fs from 'node:fs';
+import { expectMatchesGolden } from './golden';
 import { fileURLToPath } from 'node:url';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -182,10 +182,9 @@ describe('renderer WebGL2 integration & golden tests', () => {
     const rimTotal = renderResult.rim[0]! + renderResult.rim[1]! + renderResult.rim[2]!;
     expect(rimTotal).toBeGreaterThan(40);
 
-    // Save golden screenshot
+    // Compare against the committed golden screenshot
     const screenshotBuffer = await page.screenshot({ type: 'png' });
     const goldenPath = path.resolve(__dirname, '../../test-page/golden-triangle.png');
-    fs.writeFileSync(goldenPath, screenshotBuffer);
-    expect(fs.existsSync(goldenPath)).toBe(true);
+    expectMatchesGolden(screenshotBuffer, goldenPath);
   }, 30000);
 });

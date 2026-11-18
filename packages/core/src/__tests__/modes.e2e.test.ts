@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { chromium, type Browser, type Page } from '@playwright/test';
 import * as path from 'node:path';
-import * as fs from 'node:fs';
+import { expectMatchesGolden } from './golden';
 import { fileURLToPath } from 'node:url';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -138,8 +138,7 @@ describe('M5: Base Modes, Effects, and Golden Frame Screenshots', () => {
       expect(canvasHandle).not.toBeNull();
       const goldenPath = path.join(testPageDir, `golden-mode-${mode.id}.png`);
       const screenshot = await canvasHandle!.screenshot();
-      fs.writeFileSync(goldenPath, screenshot);
-      expect(fs.existsSync(goldenPath)).toBe(true);
+      expectMatchesGolden(screenshot, goldenPath);
     });
   }
 

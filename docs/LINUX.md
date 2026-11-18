@@ -8,14 +8,15 @@ Glowframe provides interactive, real-time prismatic rim dispersion wallpapers on
 
 On Linux, the desktop runner (`@glowframe/desktop`) operates as a lightweight, hardware-accelerated Tauri application running the core WebGL2 engine behind normal application windows.
 
-The runner automatically detects the active display server and compositor:
+The runner sets `GDK_BACKEND=x11` at startup (unless you set it yourself), so on every Wayland
+session it runs as an X11 window through XWayland. It does not use the `wlr-layer-shell` protocol.
 
-| Environment                                             | Mechanism                                                           | Status              |
-| :------------------------------------------------------ | :------------------------------------------------------------------ | :------------------ |
-| **X11** (i3, bspwm, XFCE, Openbox, KDE X11, GNOME Xorg) | EWMH/NetWM `_NET_WM_WINDOW_TYPE_DESKTOP` + `_NET_WM_STATE_BELOW`    | Fully Supported     |
-| **Wayland (wlroots)** (Sway, Hyprland, Wayfire, River)  | `wlr-layer-shell` protocol (`ZWLR_LAYER_SHELL_V1_LAYER_BACKGROUND`) | Fully Supported     |
-| **Wayland (KDE Plasma)**                                | KWin layer surface protocol                                         | Fully Supported     |
-| **Wayland (GNOME Shell)**                               | Mutter security restrictions (no layer-shell support)               | Documented Fallback |
+| Environment                                             | Mechanism                                                                               | Status       |
+| :------------------------------------------------------ | :-------------------------------------------------------------------------------------- | :----------- |
+| **X11** (i3, bspwm, XFCE, Openbox, KDE X11, GNOME Xorg) | EWMH/NetWM `_NET_WM_WINDOW_TYPE_DESKTOP` + `_NET_WM_STATE_BELOW`                        | Supported    |
+| **Wayland (GNOME Shell)**                               | XWayland desktop window + bundled GNOME Shell extension (clones it into the background) | Supported    |
+| **Wayland (KDE Plasma)**                                | XWayland desktop window, same EWMH hints as X11                                         | Experimental |
+| **Wayland (wlroots)** (Sway, Hyprland, Wayfire, River)  | XWayland desktop window, same EWMH hints as X11                                         | Experimental |
 
 ---
 
@@ -48,13 +49,20 @@ On X11, Glowframe creates an unbordered window sized to the monitor dimensions a
 
 ## 3. Wayland Compositors (wlroots & KDE)
 
-On compositors implementing the `wlr-layer-shell-unstable-v1` protocol:
+> [!NOTE]
+> Layer-shell (`wlr-layer-shell-unstable-v1`) support is **not implemented yet**. On these
+> compositors Halorim runs through XWayland with the same window hints as on X11
+> (`_NET_WM_WINDOW_TYPE_DESKTOP`, keep-below, sticky, click-through input region).
 
-- **Namespace**: `glowframe-wallpaper`
-- **Layer**: `background` (Layer 0)
-- **Anchor**: `top | bottom | left | right` (full screen)
-- **Exclusive Zone**: `-1` (does not push status bars or dock panels)
-- **Keyboard Interactivity**: `none` (prevents stealing keyboard focus)
+How well this works depends on how the compositor treats desktop-type XWayland windows:
+
+- **KDE Plasma (KWin)** honours the desktop window type, so the window should stay behind normal windows.
+- **wlroots compositors** (Sway, Hyprland, Wayfire, River) mostly ignore the EWMH stacking hints.
+  You may need compositor rules (below) to float, pin and size the window, and it may still be
+  drawn above tiled windows.
+
+XWayland is required. Setting `GDK_BACKEND=wayland` starts a plain native Wayland window that is
+not placed behind other windows, so it is not useful as a wallpaper.
 
 ### Hyprland Configuration
 

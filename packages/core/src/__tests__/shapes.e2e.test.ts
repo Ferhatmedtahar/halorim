@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { chromium, type Browser, type Page } from '@playwright/test';
 import * as path from 'node:path';
-import * as fs from 'node:fs';
+import { expectMatchesGolden } from './golden';
 import { fileURLToPath } from 'node:url';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -185,8 +185,7 @@ describe('M6: Arbitrary Shapes, Center Content, and Presets', () => {
     expect(canvasHandle).not.toBeNull();
     const goldenPath = path.join(testPageDir, 'golden-tux.png');
     const screenshot = await canvasHandle!.screenshot();
-    fs.writeFileSync(goldenPath, screenshot);
-    expect(fs.existsSync(goldenPath)).toBe(true);
+    expectMatchesGolden(screenshot, goldenPath);
   });
 
   it('verifies click hit-testing works accurately on Tux silhouette', async () => {
@@ -291,8 +290,7 @@ describe('M6: Arbitrary Shapes, Center Content, and Presets', () => {
     expect(canvasHandle).not.toBeNull();
     const goldenPath = path.join(testPageDir, 'golden-four-pane.png');
     const screenshot = await canvasHandle!.screenshot();
-    fs.writeFileSync(goldenPath, screenshot);
-    expect(fs.existsSync(goldenPath)).toBe(true);
+    expectMatchesGolden(screenshot, goldenPath);
   });
 
   it('renders center content layer inside silhouette and toggles visibility cleanly', async () => {

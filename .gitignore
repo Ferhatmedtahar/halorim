@@ -16,3 +16,7 @@ target/
 **/src-tauri/.cargo/
 
 .claude/
+
+# Golden-image test failure artifacts
+packages/core/test-page/*.actual.png
+packages/core/test-page/*.diff.png
