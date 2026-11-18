@@ -1,6 +1,116 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import 'tailwindcss';
+@import 'tw-animate-css';
+
+/*
+ * Halorim site design tokens (Tailwind v4, CSS-first: everything lives here, there is no tailwind.config).
+ * Black and white, with one amber primary for main actions. Sharp corners everywhere (radius 0), muted
+ * hairlines instead of shadows, surfaces butted against each other with no gaps. The only colour on the
+ * site is the wallpaper content itself (thumbnails and live previews).
+ */
+@theme {
+  --font-sans:
+    'Inter Variable', Inter, ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+
+  --color-bg: #0a0a0a;
+  --color-surface: #0e0e0e;
+  --color-raised: #131313;
+  --color-hover: #1a1a1a;
+  --color-line: #242424;
+  --color-line-strong: #3a3a3a;
+  --color-fg: #ededed;
+
+  /* Primary: the amber of a halo. Used only for main actions and active states. */
+  --color-halo: #f5b13d;
+  --color-halo-hover: #ffc45e;
+  --color-halo-dim: rgba(245, 177, 61, 0.14);
+
+  --color-muted: #8a8a8a;
+  --color-muted-foreground: #8a8a8a;
+
+  /* shadcn/ui semantic tokens, mapped to the same palette. */
+  --color-background: #0a0a0a;
+  --color-foreground: #ededed;
+  --color-border: #242424;
+  --color-input: #242424;
+  --color-ring: #f5b13d;
+  --color-popover: #0e0e0e;
+  --color-popover-foreground: #ededed;
+  --color-accent: #1a1a1a;
+  --color-accent-foreground: #ededed;
+  --color-secondary: #131313;
+  --color-secondary-foreground: #ededed;
+  --color-primary: #f5b13d;
+  --color-primary-foreground: #0a0a0a;
+
+  /* Flat: every shadow utility (including those inside shadcn components) resolves to nothing. */
+  --shadow-2xs: none;
+  --shadow-xs: none;
+  --shadow-sm: none;
+  --shadow-md: none;
+  --shadow-lg: none;
+  --shadow-xl: none;
+  --shadow-2xl: none;
+
+  /* rounded = 0, on purpose. Every radius utility resolves to square (rounded-full too, see below). */
+  --radius-xs: 0px;
+  --radius-sm: 0px;
+  --radius-md: 0px;
+  --radius-lg: 0px;
+  --radius-xl: 0px;
+  --radius-2xl: 0px;
+  --radius-3xl: 0px;
+  --radius-4xl: 0px;
+
+  --ease-out: cubic-bezier(0.4, 0, 0.2, 1);
+  --container-site: 1180px;
+
+  --animate-accordion: accordion 220ms cubic-bezier(0.4, 0, 0.2, 1) both;
+  --animate-rise: rise 550ms cubic-bezier(0.4, 0, 0.2, 1) both;
+
+  /* FAQ answer: a short drop-and-fade when it opens. */
+  @keyframes accordion {
+    0% {
+      opacity: 0;
+      transform: translateY(-6px);
+    }
+    100% {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+  @keyframes rise {
+    0% {
+      opacity: 0;
+      transform: translateY(8px);
+    }
+    100% {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+}
+
+@utility rounded-full {
+  border-radius: 0px;
+}
+@utility duration-fast {
+  transition-duration: 150ms;
+}
+@utility duration-slow {
+  transition-duration: 550ms;
+}
+
+/* Tailwind v4 draws borders in currentColor unless told otherwise. */
+@layer base {
+  *,
+  ::after,
+  ::before,
+  ::backdrop,
+  ::file-selector-button {
+    border-color: var(--color-line);
+  }
+}
 
 :root {
   color-scheme: dark;
@@ -26,7 +136,15 @@ body {
   min-height: 100vh;
   background: var(--bg);
   color: var(--fg);
-  font-family: 'Inter Variable', Inter, ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  font-family:
+    'Inter Variable',
+    Inter,
+    ui-sans-serif,
+    system-ui,
+    -apple-system,
+    'Segoe UI',
+    Roboto,
+    sans-serif;
   font-size: 16px;
   line-height: 1.5;
   font-feature-settings: 'cv11', 'ss03';

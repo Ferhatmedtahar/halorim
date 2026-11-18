@@ -255,7 +255,7 @@ export const ModeSchema = z
   .object({
     id: BaseModeIdSchema.or(z.string().min(1)).describe('Base animation mode identifier'),
     params: z
-      .record(z.unknown())
+      .record(z.string(), z.unknown())
       .default({})
       .describe('Mode-specific continuous animation parameters'),
   })
@@ -264,7 +264,7 @@ export const ModeSchema = z
 export const ModifierSchema = z
   .object({
     id: z.string().min(1).describe('Modifier effect identifier'),
-    params: z.record(z.unknown()).default({}).describe('Modifier parameters'),
+    params: z.record(z.string(), z.unknown()).default({}).describe('Modifier parameters'),
   })
   .describe('Secondary continuous effect modifier');
 
@@ -313,7 +313,10 @@ export const ClickActionIdSchema = z.enum([
 export const ClickActionItemSchema = z
   .object({
     action: ClickActionIdSchema.or(z.string().min(1)).describe('Action identifier to trigger'),
-    params: z.record(z.unknown()).optional().describe('Optional parameters for the click action'),
+    params: z
+      .record(z.string(), z.unknown())
+      .optional()
+      .describe('Optional parameters for the click action'),
   })
   .describe('Click event action entry');
 
